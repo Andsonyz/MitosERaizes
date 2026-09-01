@@ -2,5 +2,5 @@ package br.com.entremitoseraizes;
 
 /** Cenários da fase de teste. */
 enum Scene {
-    OUTDOOR, CABIN
+    FOREST_PATH, CABIN_APPROACH, CABIN_INTERIOR
 }

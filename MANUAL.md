@@ -1,51 +1,55 @@
 # Entre Mitos e Raízes
 
-Jogo educativo 2D em Java sobre as lendas do folclore brasileiro e a proteção
-da floresta. A campanha foi planejada para aproximadamente **30 a 40 minutos**,
-em quatro capítulos: Saci, Caipora, Iara e Boitatá.
+Jogo 2D em Java, com arte em pixel art e controles por teclado. Esta versão
+implementa a fase de teste **O Chamado do Curupira**, em que uma pessoa humana
+entra na floresta, conhece o guardião e ajuda a proteger a mata.
 
-## O que já está no jogo
+## Recursos implementados
 
-- Menu inicial com **Jogar**, **Configurações** e **Extras**;
-- Mapa 2D pixelado, inspirado na paleta vibrante do Game Boy Advance;
-- Controles completos por teclado, sem dependência de mouse;
-- Missões de investigação, prevenção de queimadas, proteção de trilhas, água e fauna;
-- Diálogos educativos, feedback para cada ação e conclusão narrativa;
-- Códice consultável com as lendas que aparecem na história;
-- Opções de alto contraste e tamanho de texto;
-- Créditos de Antonio Andson e Sophia Hellen.
+- Fundo animado no menu, usando `Image/Cenarios/MENU_loop.gif`;
+- Arte de título, cenários do Curupira e personagem fornecidos em `Image/`;
+- Criação de personagem por apelido, usado nos diálogos;
+- Dois slots de save locais; os dados não são gravados no projeto ou Git;
+- Menu inicial com novo jogo, continuar em cada slot, configurações, extras e saída;
+- Menu de pausa durante a partida: continuar, salvar, configurações, lobby e sair;
+- Três cenários conectados pelas imagens fornecidas: `CRPR-pt1` (trilha),
+  `CRPR-pt2` (entrada da cabana) e `CRPR-pt3` (interior);
+- Navegação direta entre cenários pelas bordas da tela e pela porta da cabana;
+- Personagem jogável Greg, com sprite parado e sprite andando;
+- Transição preta circular ao iniciar/trocar cenas;
+- Ajustes de alto contraste e tamanho de texto;
+- Fase de teste: chegada à mata, descoberta da cabana e conversa com o Curupira.
 
-## Como executar
+## Executar
 
-O projeto usa somente Java 8+ e Swing, portanto não precisa baixar bibliotecas.
+Requer Java 8 ou superior. Execute a partir da raiz do projeto, para que as
+imagens da pasta `Image/` sejam encontradas.
 
 ```powershell
-javac -encoding UTF-8 -d out src/main/java/br/com/entremitoseraizes/*.java
+javac -encoding UTF-8 -d out (Get-ChildItem -Recurse -Path src/main/java -Filter *.java | ForEach-Object { $_.FullName })
 java -cp out br.com.entremitoseraizes.Main
-```
-
-Em uma IDE, importe a pasta como um projeto Maven ou execute a classe
-`br.com.entremitoseraizes.Main`.
-
-## Verificação rápida
-
-O teste de fluxo abaixo valida as quatro missões sem abrir a janela:
-
-```powershell
-javac -encoding UTF-8 -cp out -d out src/test/java/br/com/entremitoseraizes/GameSessionSmokeTest.java
-java -cp out br.com.entremitoseraizes.GameSessionSmokeTest
 ```
 
 ## Controles
 
 | Tecla | Ação |
 | --- | --- |
-| `WASD` ou setas | mover / selecionar opção |
-| `E` | interagir com um sinal, personagem ou objeto próximo |
-| `Enter` ou `Espaço` | avançar diálogo / confirmar |
-| `C` | abrir o Códice durante a exploração |
-| `M` | abrir o mapa da região |
-| `Esc` | voltar / pausar |
+| `WASD` ou setas | mover / selecionar |
+| `Enter` ou `Espaço` | confirmar / avançar diálogo |
+| `E` | interagir |
+| `M` | abrir mapa dos três cenários |
+| `F5` | salvar no slot atual |
+| `Esc` | abrir menu da partida / voltar |
 
-Os símbolos `!` no mapa indicam tarefas da missão atual. Aproxime-se deles e
-pressione `E`. As árvores, rios e pontes também fazem parte da navegação.
+## Privacidade dos saves
+
+O jogo usa dois arquivos locais na pasta `.saves/`, que é ignorada pelo Git.
+Apenas apelido, progresso e posição são salvos; nada é enviado pela internet ou
+incluído no repositório. Evite usar nome completo se o computador for compartilhado.
+
+## Verificação técnica
+
+```powershell
+javac -encoding UTF-8 -cp out -d out (Get-ChildItem -Recurse -Path src/test/java -Filter *.java | ForEach-Object { $_.FullName })
+java -ea -cp out br.com.entremitoseraizes.GameSessionSmokeTest
+```

@@ -19,8 +19,10 @@ final class GameWindow extends JFrame {
                 System.exit(0);
             }
         });
+        setUndecorated(true);
         setResizable(false);
         pack();
         setLocationRelativeTo(null);
+        setExtendedState(JFrame.MAXIMIZED_BOTH);
     }
 }

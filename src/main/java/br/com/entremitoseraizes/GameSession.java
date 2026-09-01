@@ -6,15 +6,12 @@ import java.util.Set;
 
 /** Estado persistente da primeira fase, sem guardar dados pessoais além do apelido escolhido. */
 final class GameSession {
-    static final float OUTDOOR_WIDTH = 3600f;
-    static final float OUTDOOR_HEIGHT = 1900f;
-
     private String playerName = "Viajante";
     private int activeSlot = 1;
-    private Scene scene = Scene.OUTDOOR;
+    private Scene scene = Scene.FOREST_PATH;
     private Stage stage = Stage.FIND_CABIN;
-    private float playerX = 310f;
-    private float playerY = 1220f;
+    private float playerX = 100f;
+    private float playerY = 540f;
     private boolean animalFollowing;
     private long raceEndsAt;
     private final Set<String> completed = new HashSet<String>();
@@ -22,10 +19,10 @@ final class GameSession {
     void startNew(String name, int slot) {
         playerName = cleanName(name);
         activeSlot = slot;
-        scene = Scene.OUTDOOR;
+        scene = Scene.FOREST_PATH;
         stage = Stage.FIND_CABIN;
-        playerX = 310f;
-        playerY = 1220f;
+        playerX = 100f;
+        playerY = 540f;
         animalFollowing = false;
         raceEndsAt = 0L;
         completed.clear();
@@ -39,7 +36,7 @@ final class GameSession {
     float playerY() { return playerY; }
     boolean animalFollowing() { return animalFollowing; }
     long raceEndsAt() { return raceEndsAt; }
-    boolean raceIsActive() { return stage == Stage.RACE_TO_TREE && raceEndsAt > 0L; }
+    boolean raceIsActive() { return false; }
     boolean isComplete(String id) { return completed.contains(id); }
     Set<String> completedCopy() { return new HashSet<String>(completed); }
 
@@ -52,10 +49,7 @@ final class GameSession {
     void complete(String id) { completed.add(id); }
     boolean completedAll(String... ids) { return completed.containsAll(Arrays.asList(ids)); }
 
-    void startRace() {
-        raceEndsAt = System.currentTimeMillis() + 30000L;
-        stage = Stage.RACE_TO_TREE;
-    }
+    void startRace() { raceEndsAt = System.currentTimeMillis() + 30000L; }
 
     void stopRace() { raceEndsAt = 0L; }
 
@@ -75,7 +69,7 @@ final class GameSession {
 
     private static Scene safeScene(int ordinal) {
         Scene[] values = Scene.values();
-        return ordinal >= 0 && ordinal < values.length ? values[ordinal] : Scene.OUTDOOR;
+        return ordinal >= 0 && ordinal < values.length ? values[ordinal] : Scene.FOREST_PATH;
     }
 
     private static Stage safeStage(int ordinal) {

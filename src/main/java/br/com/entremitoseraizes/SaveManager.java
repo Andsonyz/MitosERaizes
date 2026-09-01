@@ -1,64 +1,83 @@
 package br.com.entremitoseraizes;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Properties;
 import java.util.Set;
-import java.util.prefs.BackingStoreException;
-import java.util.prefs.Preferences;
 
-/** Dois slots locais usando as preferências do sistema, fora do repositório público. */
+/** Dois saves locais em arquivos ignorados pelo Git, sem usar o registro do Windows. */
 final class SaveManager {
-    private static final String NODE = "saves";
-    private final Preferences preferences = Preferences.userNodeForPackage(SaveManager.class).node(NODE);
+    private static final File SAVE_DIRECTORY = new File(System.getProperty("entremitos.saves.dir", ".saves"));
 
-    boolean hasSave(int slot) { return preferences.getBoolean(key(slot, "exists"), false); }
+    boolean hasSave(int slot) { return Boolean.parseBoolean(read(slot).getProperty("exists", "false")); }
 
     void save(GameSession session) {
-        int slot = session.activeSlot();
-        preferences.putBoolean(key(slot, "exists"), true);
-        preferences.put(key(slot, "name"), session.playerName());
-        preferences.putInt(key(slot, "scene"), session.scene().ordinal());
-        preferences.putInt(key(slot, "stage"), session.stage().ordinal());
-        preferences.putFloat(key(slot, "x"), session.playerX());
-        preferences.putFloat(key(slot, "y"), session.playerY());
-        preferences.putBoolean(key(slot, "animal"), session.animalFollowing());
-        preferences.putLong(key(slot, "race"), session.raceEndsAt());
-        preferences.put(key(slot, "flags"), join(session.completedCopy()));
-        flushQuietly();
+        Properties properties = new Properties();
+        properties.setProperty("exists", "true");
+        properties.setProperty("name", session.playerName());
+        properties.setProperty("scene", String.valueOf(session.scene().ordinal()));
+        properties.setProperty("stage", String.valueOf(session.stage().ordinal()));
+        properties.setProperty("x", String.valueOf(session.playerX()));
+        properties.setProperty("y", String.valueOf(session.playerY()));
+        properties.setProperty("animal", String.valueOf(session.animalFollowing()));
+        properties.setProperty("race", String.valueOf(session.raceEndsAt()));
+        properties.setProperty("flags", join(session.completedCopy()));
+        write(slot(session.activeSlot()), properties);
     }
 
     GameSession load(int slot) {
-        if (!hasSave(slot)) return null;
+        Properties properties = read(slot);
+        if (!Boolean.parseBoolean(properties.getProperty("exists", "false"))) return null;
         GameSession session = new GameSession();
-        String name = preferences.get(key(slot, "name"), "Viajante");
-        int scene = preferences.getInt(key(slot, "scene"), Scene.OUTDOOR.ordinal());
-        int stage = preferences.getInt(key(slot, "stage"), Stage.FIND_CABIN.ordinal());
-        float x = preferences.getFloat(key(slot, "x"), 310f);
-        float y = preferences.getFloat(key(slot, "y"), 1220f);
-        boolean animal = preferences.getBoolean(key(slot, "animal"), false);
-        long race = preferences.getLong(key(slot, "race"), 0L);
+        long race = readLong(properties, "race", 0L);
         if (race > 0L && race < System.currentTimeMillis()) race = 0L;
-        session.restore(name, slot, scene, stage, x, y, animal, race, split(preferences.get(key(slot, "flags"), "")));
+        session.restore(properties.getProperty("name", "Viajante"), slot,
+            readInt(properties, "scene", Scene.FOREST_PATH.ordinal()), readInt(properties, "stage", Stage.FIND_CABIN.ordinal()),
+            readFloat(properties, "x", 100f), readFloat(properties, "y", 540f),
+            Boolean.parseBoolean(properties.getProperty("animal", "false")), race, split(properties.getProperty("flags", "")));
         return session;
     }
 
     String summary(int slot) {
-        if (!hasSave(slot)) return "Vazio";
-        String name = preferences.get(key(slot, "name"), "Viajante");
-        int stage = preferences.getInt(key(slot, "stage"), 0);
+        Properties properties = read(slot);
+        if (!Boolean.parseBoolean(properties.getProperty("exists", "false"))) return "Vazio";
+        int ordinal = readInt(properties, "stage", 0);
         Stage[] stages = Stage.values();
-        String objective = stage >= 0 && stage < stages.length ? stages[stage].objective() : "Aventura em andamento";
-        return name + " - " + objective;
+        String objective = ordinal >= 0 && ordinal < stages.length ? stages[ordinal].objective() : "Aventura em andamento";
+        return properties.getProperty("name", "Viajante") + " - " + objective;
     }
 
-    private String key(int slot, String field) { return "slot" + slot + "." + field; }
+    private Properties read(int slot) {
+        Properties properties = new Properties();
+        File file = slot(slot);
+        if (!file.isFile()) return properties;
+        try {
+            FileInputStream input = new FileInputStream(file);
+            try { properties.load(input); } finally { input.close(); }
+        } catch (IOException ignored) { }
+        return properties;
+    }
+
+    private void write(File file, Properties properties) {
+        if (!SAVE_DIRECTORY.isDirectory() && !SAVE_DIRECTORY.mkdirs()) return;
+        try {
+            FileOutputStream output = new FileOutputStream(file);
+            try { properties.store(output, "Entre Mitos e Raizes - save local"); } finally { output.close(); }
+        } catch (IOException ignored) { }
+    }
+
+    private File slot(int slot) { return new File(SAVE_DIRECTORY, "slot-" + slot + ".properties"); }
+    private int readInt(Properties properties, String key, int fallback) { try { return Integer.parseInt(properties.getProperty(key)); } catch (NumberFormatException ignored) { return fallback; } }
+    private long readLong(Properties properties, String key, long fallback) { try { return Long.parseLong(properties.getProperty(key)); } catch (NumberFormatException ignored) { return fallback; } }
+    private float readFloat(Properties properties, String key, float fallback) { try { return Float.parseFloat(properties.getProperty(key)); } catch (NumberFormatException ignored) { return fallback; } }
 
     private static String join(Set<String> flags) {
         StringBuilder result = new StringBuilder();
-        for (String flag : flags) {
-            if (result.length() > 0) result.append(',');
-            result.append(flag.replace(",", ""));
-        }
+        for (String flag : flags) { if (result.length() > 0) result.append(','); result.append(flag.replace(",", "")); }
         return result.toString();
     }
 
@@ -67,10 +86,5 @@ final class SaveManager {
         Set<String> result = new HashSet<String>();
         for (String part : value.split(",")) if (!part.trim().isEmpty()) result.add(part.trim());
         return result;
-    }
-
-    private void flushQuietly() {
-        try { preferences.flush(); }
-        catch (BackingStoreException ignored) { }
     }
 }
