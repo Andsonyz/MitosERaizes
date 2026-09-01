@@ -30,10 +30,13 @@ import javax.swing.Timer;
 /** Jogo construído sobre os três cenários fornecidos: trilha, cabana e interior. */
 final class GamePanel extends JPanel implements KeyListener {
     private static final long serialVersionUID = 3L;
-    private static final int WIDTH = 1152;
+    private static final int WIDTH = 1280;
     private static final int HEIGHT = 720;
     private static final float SPEED = 220f;
     private static final float EDGE = 28f;
+    private double scale = 1.0;
+    private double offsetX = 0;
+    private double offsetY = 0;
 
     private final AccessibilitySettings accessibility = new AccessibilitySettings();
     private final SaveManager saves = new SaveManager();
@@ -88,11 +91,12 @@ final class GamePanel extends JPanel implements KeyListener {
         if (screen != Screen.MENU && screen != Screen.SLOT_SELECT && screen != Screen.NAME_INPUT) saves.save(session);
     }
 
+
     private void loadAssets() {
         forestPath = loadImage("Cenarios", "CRPR-pt1.jpeg");
         cabinApproach = loadImage("Cenarios", "CRPR-pt2.jpeg");
         cabinInterior = loadImage("Cenarios", "CRPR-pt3.jpeg");
-        menuFallback = loadImage("Cenarios", "MENU.jpeg");
+        menuFallback = loadImage("Cenarios", "MENU_loop.gif");
         title = loadImage("Cenarios", "Titulo.png");
         curupira = loadImage("Personagens", "CURUPIRA.PNG");
         gregIdle = loadImage("Greg", "GregParado.png");
@@ -104,6 +108,21 @@ final class GamePanel extends JPanel implements KeyListener {
         }
     }
 
+    private void updateScale() {
+
+        double scaleX = getWidth() / (double) WIDTH;
+        double scaleY = getHeight() / (double) HEIGHT;
+
+        // Mantém a proporção original do jogo.
+        scale = Math.min(scaleX, scaleY);
+
+        double scaledWidth = WIDTH * scale;
+        double scaledHeight = HEIGHT * scale;
+
+        // Centraliza o jogo na tela.
+        offsetX = (getWidth() - scaledWidth) / 2.0;
+        offsetY = (getHeight() - scaledHeight) / 2.0;
+    }
     private BufferedImage loadImage(String folder, String name) {
         try {
             File file = asset(folder, name);
@@ -164,26 +183,73 @@ final class GamePanel extends JPanel implements KeyListener {
         });
     }
 
-    @Override protected void paintComponent(Graphics graphics) {
+    @Override
+    protected void paintComponent(Graphics graphics) {
+
         super.paintComponent(graphics);
+
+        updateScale();
+
         Graphics2D g = (Graphics2D) graphics.create();
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
-        double scale = Math.min(getWidth() / (double) WIDTH, getHeight() / (double) HEIGHT);
-        g.translate((getWidth() - WIDTH * scale) / 2d, (getHeight() - HEIGHT * scale) / 2d);
+
+        g.setRenderingHint(
+            RenderingHints.KEY_ANTIALIASING,
+            RenderingHints.VALUE_ANTIALIAS_OFF
+        );
+
+        // Centraliza o jogo.
+        g.translate(offsetX, offsetY);
+
+        // Aplica a escala proporcional.
         g.scale(scale, scale);
-        if (screen == Screen.MENU) drawMenu(g);
-        else if (screen == Screen.SLOT_SELECT) drawSlots(g);
-        else if (screen == Screen.NAME_INPUT) drawNameInput(g);
-        else if (screen == Screen.SETTINGS) drawSettings(g);
-        else if (screen == Screen.EXTRAS) drawExtras(g);
-        else if (screen == Screen.END) drawEnd(g);
-        else {
+
+        if (screen == Screen.MENU) {
+
+            drawMenu(g);
+
+        } else if (screen == Screen.SLOT_SELECT) {
+
+            drawSlots(g);
+
+        } else if (screen == Screen.NAME_INPUT) {
+
+            drawNameInput(g);
+
+        } else if (screen == Screen.SETTINGS) {
+
+            drawSettings(g);
+
+        } else if (screen == Screen.EXTRAS) {
+
+            drawExtras(g);
+
+        } else if (screen == Screen.END) {
+
+            drawEnd(g);
+
+        } else {
+
             drawScene(g);
-            if (screen == Screen.DIALOGUE) drawDialogue(g);
-            else if (screen == Screen.PAUSE) drawPause(g);
-            else if (screen == Screen.MAP) drawMap(g);
+
+            if (screen == Screen.DIALOGUE) {
+
+                drawDialogue(g);
+
+            } else if (screen == Screen.PAUSE) {
+
+                drawPause(g);
+
+            } else if (screen == Screen.MAP) {
+
+                drawMap(g);
+            }
         }
-        if (transitionFrame >= 0) drawIris(g);
+
+        if (transitionFrame >= 0) {
+
+            drawIris(g);
+        }
+
         g.dispose();
     }
 
@@ -199,32 +265,33 @@ final class GamePanel extends JPanel implements KeyListener {
     private void drawMenu(Graphics2D g) {
         drawMenuBackground(g);
         g.setColor(new Color(3, 15, 16, 135)); g.fillRect(0, 0, WIDTH, HEIGHT);
-        if (title != null) g.drawImage(title, 347, 24, 458, 228, this);
+        if (title != null) g.drawImage(title, WIDTH / 2 - 229, 24, 458, 228, this);
         String[] options = { "Novo jogo", "Continuar - slot 1", "Continuar - slot 2", "Configurações", "Extras", "Sair do jogo" };
-        for (int i = 0; i < options.length; i++) drawOption(g, options[i], 280 + i * 58, i == menuIndex, 382, 388);
+        for (int i = 0; i < options.length; i++) drawOption(g, options[i], 280 + i * 58, i == menuIndex, WIDTH / 2 - 194, 388);
         g.setColor(c(0xFFF3C1)); g.setFont(normal(14)); centered(g, "WASD / setas para escolher • Enter para confirmar", WIDTH / 2, 674);
     }
 
     private void drawSlots(Graphics2D g) {
-        drawMenuBackground(g); shade(g, 140); card(g, 238, 128, 676, 462);
+        drawMenuBackground(g); shade(g, 140); card(g, WIDTH / 2 - 338, 128, 676, 462);
         g.setColor(ink()); g.setFont(font(29)); centered(g, "ESCOLHA UM SLOT", WIDTH / 2, 188);
         g.setFont(normal(16)); centered(g, "Os saves ficam apenas no seu computador.", WIDTH / 2, 221);
         for (int i = 0; i < 2; i++) {
             int y = 275 + 116 * i; boolean active = slotIndex == i;
-            g.setColor(active ? selected() : c(0xDDE9BE)); g.fillRoundRect(291, y, 570, 84, 10, 10);
-            g.setColor(outline()); g.drawRoundRect(291, y, 570, 84, 10, 10);
-            g.setColor(active && !accessibility.highContrast() ? Color.WHITE : ink()); g.setFont(font(20)); g.drawString("SLOT " + (i + 1), 322, y + 32);
-            g.setFont(normal(14)); drawWrapped(g, saves.summary(i + 1), 322, y + 58, 495, 18, active && !accessibility.highContrast() ? Color.WHITE : ink());
+            int slotX = WIDTH / 2 - 285; int slotWidth = 570;
+            g.setColor(active ? selected() : c(0xDDE9BE)); g.fillRoundRect(slotX, y, slotWidth, 84, 10, 10);
+            g.setColor(outline()); g.drawRoundRect(slotX, y, slotWidth, 84, 10, 10);
+            g.setColor(active && !accessibility.highContrast() ? Color.WHITE : ink()); g.setFont(font(20)); centered(g, "SLOT " + (i + 1), WIDTH / 2 - 155, y + 32);
+            g.setFont(normal(14)); drawWrapped(g, saves.summary(i + 1), slotX + 31, y + 58, 495, 18, active && !accessibility.highContrast() ? Color.WHITE : ink());
         }
         g.setColor(ink()); g.setFont(normal(14)); centered(g, "Enter cria uma nova jornada nesse slot • Esc volta", WIDTH / 2, 548);
     }
 
     private void drawNameInput(Graphics2D g) {
-        drawMenuBackground(g); shade(g, 140); card(g, 270, 170, 612, 390);
+        drawMenuBackground(g); shade(g, 140); card(g, WIDTH / 2 - 306, 170, 612, 390);
         g.setColor(ink()); g.setFont(font(28)); centered(g, "COMO VOCÊ SE CHAMA?", WIDTH / 2, 238);
         g.setFont(normal(16)); centered(g, "O Curupira quer saber quem entrou na mata.", WIDTH / 2, 276);
-        g.setColor(c(0xF9F0CF)); g.fillRoundRect(343, 322, 466, 58, 8, 8); g.setColor(outline()); g.drawRoundRect(343, 322, 466, 58, 8, 8);
-        g.setColor(ink()); g.setFont(font(22)); g.drawString(typedName.isEmpty() ? "Digite um apelido" : typedName + "_", 367, 360);
+        g.setColor(c(0xF9F0CF)); g.fillRoundRect(WIDTH / 2 - 233, 322, 466, 58, 8, 8); g.setColor(outline()); g.drawRoundRect(WIDTH / 2 - 233, 322, 466, 58, 8, 8);
+        g.setColor(ink()); g.setFont(font(22)); centered(g, typedName.isEmpty() ? "Digite um apelido" : typedName + "_", WIDTH / 2, 360);
         g.setFont(normal(14)); centered(g, "Máximo de 18 caracteres • Enter inicia • Esc volta", WIDTH / 2, 440);
     }
 
@@ -264,8 +331,8 @@ final class GamePanel extends JPanel implements KeyListener {
 
     private void drawSceneCaption(Graphics2D g, String titleText, String help) {
         g.setColor(new Color(8, 25, 23, 190)); g.fillRoundRect(20, 18, 500, 62, 10, 10);
-        g.setColor(c(0xFFF3C1)); g.setFont(font(17)); g.drawString(titleText, 40, 43);
-        g.setFont(normal(13)); g.drawString(help, 40, 65);
+        g.setColor(c(0xFFF3C1)); g.setFont(font(17)); centered(g, titleText, 20 + 250, 43);
+        g.setFont(normal(13)); centered(g, help, 20 + 250, 65);
     }
 
     private void drawGreg(Graphics2D g) {
@@ -290,36 +357,36 @@ final class GamePanel extends JPanel implements KeyListener {
     }
 
     private void drawHud(Graphics2D g) {
-        g.setColor(new Color(8, 25, 23, 190)); g.fillRoundRect(782, 18, 350, 62, 10, 10);
-        g.setColor(c(0xFFF3C1)); g.setFont(normal(13)); g.drawString("E interagir • M mapa • F5 salvar • Esc menu", 802, 43);
-        g.setFont(font(14)); g.drawString(session.stage().objective(), 802, 67);
+        g.setColor(new Color(8, 25, 23, 190)); g.fillRoundRect(WIDTH / 2 - 175, 18, 350, 62, 10, 10);
+        g.setColor(c(0xFFF3C1)); g.setFont(normal(13)); centered(g, "E interagir • M mapa • F5 salvar • Esc menu", WIDTH / 2, 43);
+        g.setFont(font(14)); centered(g, session.stage().objective(), WIDTH / 2, 67);
     }
 
     private void drawDialogue(Graphics2D g) {
         shade(g, 110);
         if (dialogue.isEmpty()) return;
         DialogueLine line = dialogue.get(dialogueIndex);
-        g.setColor(paper()); g.fillRoundRect(46, 492, 1060, 184, 13, 13); g.setColor(outline()); g.setStroke(new BasicStroke(4)); g.drawRoundRect(46, 492, 1060, 184, 13, 13);
-        g.setColor(selected()); g.fillRoundRect(72, 472, 255, 41, 8, 8); g.setColor(Color.WHITE); g.setFont(font(20)); g.drawString(line.speaker, 92, 500);
-        g.setColor(ink()); g.setFont(normal(21)); drawWrapped(g, line.text, 82, 550, 960, 29, ink());
-        g.setFont(normal(13)); g.setColor(outline()); g.drawString("Enter / Espaço para continuar", 858, 652);
+        g.setColor(paper()); g.fillRoundRect(WIDTH / 2 - 530, 492, 1060, 184, 13, 13); g.setColor(outline()); g.setStroke(new BasicStroke(4)); g.drawRoundRect(WIDTH / 2 - 530, 492, 1060, 184, 13, 13);
+        g.setColor(selected()); g.fillRoundRect(WIDTH / 2 - 512, 472, 255, 41, 8, 8); g.setColor(Color.WHITE); g.setFont(font(20)); centered(g, line.speaker, WIDTH / 2 - 384, 500);
+        g.setColor(ink()); g.setFont(normal(21)); drawWrapped(g, line.text, WIDTH / 2 - 480, 550, 960, 29, ink());
+        g.setFont(normal(13)); g.setColor(outline()); centered(g, "Enter / Espaço para continuar", WIDTH / 2, 652);
     }
 
     private void drawPause(Graphics2D g) {
-        shade(g, 180); card(g, 352, 132, 448, 456); g.setColor(ink()); g.setFont(font(30)); centered(g, "MENU DA PARTIDA", WIDTH / 2, 190);
+        shade(g, 180); card(g, WIDTH / 2 - 224, 132, 448, 456); g.setColor(ink()); g.setFont(font(30)); centered(g, "MENU DA PARTIDA", WIDTH / 2, 190);
         String[] options = { "Continuar", "Salvar agora", "Configurações", "Voltar ao lobby", "Sair do jogo" };
-        for (int i = 0; i < options.length; i++) drawOption(g, options[i], 225 + i * 58, i == pauseIndex, 392, 368);
+        for (int i = 0; i < options.length; i++) drawOption(g, options[i], 225 + i * 58, i == pauseIndex, WIDTH / 2 - 184, 368);
         g.setColor(ink()); g.setFont(normal(13)); centered(g, "↑ ↓ e Enter • Esc para continuar", WIDTH / 2, 560);
     }
 
     private void drawMap(Graphics2D g) {
-        shade(g, 175); card(g, 208, 126, 736, 452); g.setColor(ink()); g.setFont(font(28)); centered(g, "MAPA DA FASE", WIDTH / 2, 187);
+        shade(g, 175); card(g, WIDTH / 2 - 368, 126, 736, 452); g.setColor(ink()); g.setFont(font(28)); centered(g, "MAPA DA FASE", WIDTH / 2, 187);
         int y = 270; Scene[] scenes = Scene.values();
         for (int i = 0; i < scenes.length; i++) {
             boolean current = scenes[i] == session.scene();
-            g.setColor(current ? selected() : c(0xDDE9BE)); g.fillRoundRect(280, y + i * 74, 590, 48, 8, 8);
+            g.setColor(current ? selected() : c(0xDDE9BE)); g.fillRoundRect(WIDTH / 2 - 295, y + i * 74, 590, 48, 8, 8);
             g.setColor(current && !accessibility.highContrast() ? Color.WHITE : ink()); g.setFont(font(17));
-            g.drawString((i + 1) + ". " + sceneLabel(scenes[i]), 310, y + 31 + i * 74);
+            centered(g, (i + 1) + ". " + sceneLabel(scenes[i]), WIDTH / 2, y + 31 + i * 74);
         }
         g.setColor(ink()); g.setFont(normal(14)); centered(g, "Caminho: Trilha → Entrada da cabana → Interior", WIDTH / 2, 520);
         centered(g, "Esc ou M para fechar", WIDTH / 2, 550);
@@ -330,22 +397,22 @@ final class GamePanel extends JPanel implements KeyListener {
     }
 
     private void drawSettings(Graphics2D g) {
-        drawMenuBackground(g); shade(g, 140); card(g, 270, 150, 612, 410); g.setColor(ink()); g.setFont(font(28)); centered(g, "CONFIGURAÇÕES", WIDTH / 2, 210);
+        drawMenuBackground(g); shade(g, 140); card(g, WIDTH / 2 - 306, 150, 612, 410); g.setColor(ink()); g.setFont(font(28)); centered(g, "CONFIGURAÇÕES", WIDTH / 2, 210);
         String[] labels = { "Tamanho do texto", "Alto contraste" }; String[] values = { accessibility.textSizeName(), accessibility.highContrast() ? "Ativado" : "Desativado" };
-        for (int i = 0; i < 2; i++) { int y = 260 + i * 94; boolean active = i == settingsIndex; g.setColor(active ? selected() : c(0xDDE9BE)); g.fillRoundRect(320, y, 512, 71, 8, 8); g.setColor(active && !accessibility.highContrast() ? Color.WHITE : ink()); g.setFont(font(19)); g.drawString(labels[i], 350, y + 30); g.setFont(normal(15)); g.drawString("◀   " + values[i] + "   ▶", 350, y + 55); }
+        for (int i = 0; i < 2; i++) { int y = 260 + i * 94; boolean active = i == settingsIndex; g.setColor(active ? selected() : c(0xDDE9BE)); g.fillRoundRect(WIDTH / 2 - 256, y, 512, 71, 8, 8); g.setColor(active && !accessibility.highContrast() ? Color.WHITE : ink()); g.setFont(font(19)); centered(g, labels[i], WIDTH / 2, y + 30); g.setFont(normal(15)); centered(g, "◀   " + values[i] + "   ▶", WIDTH / 2, y + 55); }
         g.setColor(ink()); g.setFont(normal(14)); centered(g, "↑ ↓ escolhe • ← → ou Enter altera • Esc volta", WIDTH / 2, 512);
     }
 
     private void drawExtras(Graphics2D g) {
-        drawMenuBackground(g); shade(g, 140); card(g, 276, 165, 600, 382); g.setColor(ink()); g.setFont(font(29)); centered(g, "EXTRAS", WIDTH / 2, 225);
+        drawMenuBackground(g); shade(g, 140); card(g, WIDTH / 2 - 300, 165, 600, 382); g.setColor(ink()); g.setFont(font(29)); centered(g, "EXTRAS", WIDTH / 2, 225);
         g.setFont(normal(16)); centered(g, "Entre Mitos e Raízes", WIDTH / 2, 263); g.setFont(font(22)); centered(g, "Antonio Andson", WIDTH / 2, 339); centered(g, "Sophia Hellen", WIDTH / 2, 386);
         g.setFont(normal(15)); centered(g, "Fase de teste: O Chamado do Curupira", WIDTH / 2, 450); centered(g, "Esc ou Enter para voltar", WIDTH / 2, 516);
     }
 
     private void drawEnd(Graphics2D g) {
-        drawMenuBackground(g); shade(g, 145); card(g, 242, 137, 668, 446); g.setColor(ink()); g.setFont(font(31)); centered(g, "FASE DE TESTE CONCLUÍDA", WIDTH / 2, 204);
-        if (curupira != null) g.drawImage(curupira, 350, 255, 116, 142, this);
-        g.setFont(normal(19)); drawWrapped(g, "Você encontrou o Curupira e recebeu o chamado para proteger a mata. A próxima parte da aventura será desenvolvida a partir deste encontro.", 500, 293, 345, 29, ink());
+        drawMenuBackground(g); shade(g, 145); card(g, WIDTH / 2 - 334, 137, 668, 446); g.setColor(ink()); g.setFont(font(31)); centered(g, "FASE DE TESTE CONCLUÍDA", WIDTH / 2, 204);
+        if (curupira != null) g.drawImage(curupira, WIDTH / 2 - 58, 255, 116, 142, this);
+        g.setFont(normal(19)); drawWrapped(g, "Você encontrou o Curupira e recebeu o chamado para proteger a mata. A próxima parte da aventura será desenvolvida a partir deste encontro.", WIDTH / 2 - 172, 293, 345, 29, ink());
         g.setFont(normal(15)); centered(g, "Enter ou Esc para voltar ao lobby", WIDTH / 2, 536);
     }
 
@@ -356,7 +423,7 @@ final class GamePanel extends JPanel implements KeyListener {
 
     private void bubble(Graphics2D g, int x, int y, String text) { g.setColor(c(0xFFF0A1)); g.fillRoundRect(x - 15, y - 12, 30, 25, 7, 7); g.setColor(c(0x333A36)); g.setFont(font(17)); centered(g, text, x, y + 7); }
     private void edgeArrow(Graphics2D g, int x, int y, String text) { g.setColor(new Color(8, 25, 23, 170)); g.fillRoundRect(x - 17, y - 25, 34, 50, 8, 8); g.setColor(c(0xFFF3C1)); g.setFont(font(26)); centered(g, text, x, y + 9); }
-    private void drawToast(Graphics2D g) { g.setColor(new Color(8, 25, 23, 220)); g.fillRoundRect(345, 104, 462, 38, 8, 8); g.setColor(c(0xFFF3C1)); g.setFont(normal(14)); centered(g, toast, WIDTH / 2, 129); }
+    private void drawToast(Graphics2D g) { g.setColor(new Color(8, 25, 23, 220)); g.fillRoundRect(WIDTH / 2 - 231, 104, 462, 38, 8, 8); g.setColor(c(0xFFF3C1)); g.setFont(normal(14)); centered(g, toast, WIDTH / 2, 129); }
     private void shade(Graphics2D g, int alpha) { g.setColor(new Color(0, 0, 0, alpha)); g.fillRect(0, 0, WIDTH, HEIGHT); }
     private void card(Graphics2D g, int x, int y, int w, int h) { g.setColor(paper()); g.fillRoundRect(x, y, w, h, 15, 15); g.setColor(outline()); g.setStroke(new BasicStroke(4)); g.drawRoundRect(x, y, w, h, 15, 15); }
 
