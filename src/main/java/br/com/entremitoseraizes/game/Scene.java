@@ -1,6 +1,6 @@
-package br.com.entremitoseraizes;
+package br.com.entremitoseraizes.game;
 
 /** Cenários da fase de teste. */
-enum Scene {
+public enum Scene {
     FOREST_PATH, CABIN_APPROACH, CABIN_INTERIOR
 }

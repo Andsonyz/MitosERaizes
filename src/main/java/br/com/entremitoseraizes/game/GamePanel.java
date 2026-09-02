@@ -1,4 +1,4 @@
-package br.com.entremitoseraizes;
+package br.com.entremitoseraizes.game;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
@@ -11,6 +11,8 @@ import java.awt.Image;
 import java.awt.RenderingHints;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
 import java.awt.geom.Area;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Rectangle2D;
@@ -26,14 +28,20 @@ import javax.imageio.ImageIO;
 import javax.swing.ImageIcon;
 import javax.swing.JPanel;
 import javax.swing.Timer;
+import java.awt.event.MouseMotionListener; 
+
+import br.com.entremitoseraizes.accessibility.AccessibilitySettings;
+import br.com.entremitoseraizes.dialogue.DialogueLine;
 
 /** Jogo construído sobre os três cenários fornecidos: trilha, cabana e interior. */
-final class GamePanel extends JPanel implements KeyListener {
+final class GamePanel extends JPanel implements KeyListener, MouseListener, MouseMotionListener {
     private static final long serialVersionUID = 3L;
     private static final int WIDTH = 1280;
     private static final int HEIGHT = 720;
     private static final float SPEED = 220f;
     private static final float EDGE = 28f;
+    private static final int HELP_BUTTON_SIZE = 100;
+    private static final int HELP_BUTTON_MARGIN = 24;
     private double scale = 1.0;
     private double offsetX = 0;
     private double offsetY = 0;
@@ -46,6 +54,11 @@ final class GamePanel extends JPanel implements KeyListener {
     private BufferedImage cabinApproach;
     private BufferedImage cabinInterior;
     private BufferedImage title;
+    private BufferedImage novoJogo;
+    private BufferedImage continuar;
+    private BufferedImage configuracoes;
+    private BufferedImage sair;
+    private BufferedImage helpButton;
     private BufferedImage curupira;
     private BufferedImage gregIdle;
     private BufferedImage gregWalkPart1;
@@ -66,6 +79,10 @@ final class GamePanel extends JPanel implements KeyListener {
     private long previousTick = System.nanoTime();
     private int animationFrame;
     private int walkingFrame;
+    private float menuButtonScale = 1.0f;
+    private float helpButtonScale = 1.0f;
+    private boolean helpButtonHovered;
+    private boolean loadingSave;
     private boolean gregIsWalking;
     private int transitionFrame = -1;
     private Runnable transitionAction;
@@ -77,10 +94,28 @@ final class GamePanel extends JPanel implements KeyListener {
         setDoubleBuffered(true);
         setFocusable(true);
         addKeyListener(this);
+        addMouseListener(this);
+        addMouseMotionListener(this);
         loadAssets();
         clock = new Timer(16, event -> tick());
         clock.start();
     }
+
+    @Override
+    public void mouseMoved(MouseEvent event) {
+        if (screen != Screen.MENU) {
+            helpButtonHovered = false;
+            return;
+        }
+
+        double x = (event.getX() - offsetX) / scale;
+        double y = (event.getY() - offsetY) / scale;
+
+        helpButtonHovered = insideHelpButton(x, y);
+    }
+
+    @Override
+    public void mouseDragged(MouseEvent event) {}
 
     @Override public void addNotify() {
         super.addNotify();
@@ -98,6 +133,11 @@ final class GamePanel extends JPanel implements KeyListener {
         cabinInterior = loadImage("Cenarios", "CRPR-pt3.jpeg");
         menuFallback = loadImage("Cenarios", "MENU_loop.gif");
         title = loadImage("Cenarios", "Titulo.png");
+        novoJogo = loadImage("Cenarios", "NovoGame.png");
+        continuar = loadImage("Cenarios", "Continuar.png");
+        configuracoes = loadImage("Cenarios", "Configuracoes.png");
+        sair = loadImage("Cenarios", "Sair.png");
+        helpButton = loadImage("Cenarios", "Interrogacao.png");
         curupira = loadImage("Personagens", "CURUPIRA.PNG");
         gregIdle = loadImage("Greg", "GregParado.png");
         gregWalkPart1 = loadImage("Greg", "GregAndandoPT1.png");
@@ -137,6 +177,18 @@ final class GamePanel extends JPanel implements KeyListener {
         float delta = Math.min(0.05f, (now - previousTick) / 1_000_000_000f);
         previousTick = now;
         animationFrame++;
+        if (screen == Screen.MENU) {
+            menuButtonScale += (1.08f - menuButtonScale) * 0.15f;
+        } else {
+            menuButtonScale += (1.0f - menuButtonScale) * 0.15f;
+        }
+
+        if (screen == Screen.MENU && helpButtonHovered) {
+            helpButtonScale += (1.10f - helpButtonScale) * 0.15f;
+        } else {
+            helpButtonScale += (1.0f - helpButtonScale) * 0.15f;
+        }
+
         if (toastFrames > 0) toastFrames--;
         if (transitionFrame >= 0) {
             transitionFrame++;
@@ -257,20 +309,124 @@ final class GamePanel extends JPanel implements KeyListener {
         if (menuFallback != null) g.drawImage(menuFallback, 0, 0, WIDTH, HEIGHT, this);
         else { g.setColor(c(0x244B3B)); g.fillRect(0, 0, WIDTH, HEIGHT); }
         // O quadro estático por baixo elimina o brilho entre frames do GIF carregado.
-        if (menuAnimation != null && menuAnimation.getImageLoadStatus() == java.awt.MediaTracker.COMPLETE) {
-            g.drawImage(menuAnimation.getImage(), 0, 0, WIDTH, HEIGHT, this);
+        if (menuAnimation != null) {
+            g.drawImage(
+                menuAnimation.getImage(),
+                0,
+                0,
+                WIDTH,
+                HEIGHT,
+                this
+            );
+        } else if (menuFallback != null) {
+            g.drawImage(
+                menuFallback,
+                0,
+                0,
+                WIDTH,
+                HEIGHT,
+                this
+            );
+        } else {
+            g.setColor(c(0x244B3B));
+            g.fillRect(0, 0, WIDTH, HEIGHT);
         }
     }
 
+
     private void drawMenu(Graphics2D g) {
         drawMenuBackground(g);
-        g.setColor(new Color(3, 15, 16, 135)); g.fillRect(0, 0, WIDTH, HEIGHT);
-        if (title != null) g.drawImage(title, WIDTH / 2 - 229, 24, 458, 228, this);
-        String[] options = { "Novo jogo", "Continuar - slot 1", "Continuar - slot 2", "Configurações", "Extras", "Sair do jogo" };
-        for (int i = 0; i < options.length; i++) drawOption(g, options[i], 280 + i * 58, i == menuIndex, WIDTH / 2 - 194, 388);
-        g.setColor(c(0xFFF3C1)); g.setFont(normal(14)); centered(g, "WASD / setas para escolher • Enter para confirmar", WIDTH / 2, 674);
+
+        g.setColor(new Color(3, 15, 16, 135));
+        g.fillRect(0, 0, WIDTH, HEIGHT);
+
+        // Título permanece centralizado.
+        if (title != null) {
+            g.drawImage(title, WIDTH / 2 - 229, 24, 458, 228, this);
+        }
+
+        // Menu principal deslocado para a esquerda.
+        String[] options = {
+            "Novo jogo",
+            "Continuar",
+            "Configurações",
+            "Sair do jogo"
+        };
+
+        for (int i = 0; i < options.length; i++) {
+            BufferedImage buttonImage = null;
+
+            if (i == 0) {
+                buttonImage = novoJogo;
+            } else if (i == 1) {
+                buttonImage = continuar;
+            } else if (i == 2) {
+                buttonImage = configuracoes;
+            } else if (i == 3) {
+                buttonImage = sair;
+            }
+
+            drawMenuButtonImage(
+                g,
+                buttonImage,
+                86,
+                264 + i * 58,
+                i == menuIndex
+            );
+        }
+
+        // Botão de informações.
+        drawHelpButton(g);
+
     }
 
+    private void drawMenuButtonImage(
+        Graphics2D g,
+        BufferedImage image,
+        int x,
+        int y,
+        boolean selected) {
+
+        if (image == null) {
+            return;
+        }
+
+        float scale = selected ? menuButtonScale : 1.0f;
+
+        int baseWidth = 260;
+        int baseHeight = 130;
+
+        int width = Math.round(baseWidth * scale);
+        int height = Math.round(baseHeight * scale);
+
+        int drawX = x + (baseWidth - width) / 2;
+        int drawY = y + (baseHeight - height) / 2;
+
+        g.drawImage(
+            image,
+            drawX,
+            drawY,
+            width,
+            height,
+            this
+        );
+    }
+
+    private int helpButtonX() {
+        return WIDTH - HELP_BUTTON_MARGIN - HELP_BUTTON_SIZE;
+    }
+
+    private int helpButtonY() {
+        return HEIGHT - HELP_BUTTON_MARGIN - HELP_BUTTON_SIZE;
+    }
+
+    private boolean insideHelpButton(double x, double y) {
+    return x >= helpButtonX()
+        && x <= helpButtonX() + HELP_BUTTON_SIZE
+        && y >= helpButtonY()
+        && y <= helpButtonY() + HELP_BUTTON_SIZE;
+    
+    }
     private void drawSlots(Graphics2D g) {
         drawMenuBackground(g); shade(g, 140); card(g, WIDTH / 2 - 338, 128, 676, 462);
         g.setColor(ink()); g.setFont(font(29)); centered(g, "ESCOLHA UM SLOT", WIDTH / 2, 188);
@@ -284,6 +440,50 @@ final class GamePanel extends JPanel implements KeyListener {
             g.setFont(normal(14)); drawWrapped(g, saves.summary(i + 1), slotX + 31, y + 58, 495, 18, active && !accessibility.highContrast() ? Color.WHITE : ink());
         }
         g.setColor(ink()); g.setFont(normal(14)); centered(g, "Enter cria uma nova jornada nesse slot • Esc volta", WIDTH / 2, 548);
+    }
+
+    private void drawHelpButton(Graphics2D g) {
+
+        if (helpButton == null) {
+            return;
+        }
+
+        int baseSize = HELP_BUTTON_SIZE;
+
+        float scale = helpButtonHovered
+                ? helpButtonScale
+                : 1.0f;
+
+        int originalWidth = helpButton.getWidth();
+        int originalHeight = helpButton.getHeight();
+
+        float aspectRatio = (float) originalWidth / originalHeight;
+
+        int width;
+        int height;
+
+        if (aspectRatio >= 1.0f) {
+            width = Math.round(baseSize * scale);
+            height = Math.round(width / aspectRatio);
+        } else {
+            height = Math.round(baseSize * scale);
+            width = Math.round(height * aspectRatio);
+        }
+
+        int areaX = WIDTH - HELP_BUTTON_MARGIN - baseSize;
+        int areaY = HEIGHT - HELP_BUTTON_MARGIN - baseSize;
+
+        int x = areaX + (baseSize - width) / 2;
+        int y = areaY + (baseSize - height) / 2;
+
+        g.drawImage(
+            helpButton,
+            x,
+            y,
+            width,
+            height,
+            this
+        );
     }
 
     private void drawNameInput(Graphics2D g) {
@@ -323,8 +523,8 @@ final class GamePanel extends JPanel implements KeyListener {
 
     private void drawCabinInterior(Graphics2D g) {
         drawImageScene(g, cabinInterior, "Cenário 3/3  •  Dentro da cabana", "Aproxime-se do Curupira e pressione E. Vá à direita para sair.");
-        int curupiraX = 720, curupiraY = 275;
-        drawCurupira(g, curupiraX, curupiraY, 112, 136);
+        int curupiraX = 500, curupiraY = 430;
+        drawCurupira(g, curupiraX, curupiraY, 130, 158);
         edgeArrow(g, WIDTH - 42, HEIGHT / 2, "→");
         if (distance(session.playerX(), session.playerY(), curupiraX + 44, curupiraY + 90) < 128) bubble(g, curupiraX + 45, curupiraY - 20, "E");
     }
@@ -404,16 +604,176 @@ final class GamePanel extends JPanel implements KeyListener {
     }
 
     private void drawExtras(Graphics2D g) {
-        drawMenuBackground(g); shade(g, 140); card(g, WIDTH / 2 - 300, 165, 600, 382); g.setColor(ink()); g.setFont(font(29)); centered(g, "EXTRAS", WIDTH / 2, 225);
-        g.setFont(normal(16)); centered(g, "Entre Mitos e Raízes", WIDTH / 2, 263); g.setFont(font(22)); centered(g, "Antonio Andson", WIDTH / 2, 339); centered(g, "Sophia Hellen", WIDTH / 2, 386);
-        g.setFont(normal(15)); centered(g, "Fase de teste: O Chamado do Curupira", WIDTH / 2, 450); centered(g, "Esc ou Enter para voltar", WIDTH / 2, 516);
+        drawMenuBackground(g);
+        shade(g, 140);
+
+        card(
+            g,
+            WIDTH / 2 - 350,
+            90,
+            700,
+            540
+        );
+
+        g.setColor(ink());
+        g.setFont(font(29));
+        centered(
+            g,
+            "COMO JOGAR",
+            WIDTH / 2,
+            145
+        );
+
+        g.setFont(normal(17));
+
+        centered(
+            g,
+            "CONTROLES",
+            WIDTH / 2,
+            195
+        );
+
+        int startY = 235;
+        int spacing = 38;
+
+        centered(
+            g,
+            "WASD / Setas  —  Mover o personagem",
+            WIDTH / 2,
+            startY
+        );
+
+        centered(
+            g,
+            "E  —  Interagir",
+            WIDTH / 2,
+            startY + spacing
+        );
+
+        centered(
+            g,
+            "M  —  Abrir o mapa",
+            WIDTH / 2,
+            startY + spacing * 2
+        );
+
+        centered(
+            g,
+            "F5  —  Salvar o progresso",
+            WIDTH / 2,
+            startY + spacing * 3
+        );
+
+        centered(
+            g,
+            "Esc  —  Abrir o menu / voltar",
+            WIDTH / 2,
+            startY + spacing * 4
+        );
+
+        centered(
+            g,
+            "Enter / Espaço  —  Confirmar / avançar",
+            WIDTH / 2,
+            startY + spacing * 5
+        );
+
+        g.setFont(font(21));
+
+        centered(
+            g,
+            "CRÉDITOS",
+            WIDTH / 2,
+            475
+        );
+
+        g.setFont(normal(16));
+
+        centered(
+            g,
+            "Entre Mitos e Raízes",
+            WIDTH / 2,
+            510
+        );
+
+        centered(
+            g,
+            "Antonio Andson  •  Sophia Hellen",
+            WIDTH / 2,
+            538
+        );
+
+        g.setFont(normal(14));
+
+        centered(
+            g,
+            "Fase de teste: O Chamado do Curupira",
+            WIDTH / 2,
+            575
+        );
+
+        centered(
+            g,
+            "Esc ou Enter para voltar",
+            WIDTH / 2,
+            605
+        );
     }
 
     private void drawEnd(Graphics2D g) {
-        drawMenuBackground(g); shade(g, 145); card(g, WIDTH / 2 - 334, 137, 668, 446); g.setColor(ink()); g.setFont(font(31)); centered(g, "FASE DE TESTE CONCLUÍDA", WIDTH / 2, 204);
-        if (curupira != null) g.drawImage(curupira, WIDTH / 2 - 58, 255, 116, 142, this);
-        g.setFont(normal(19)); drawWrapped(g, "Você encontrou o Curupira e recebeu o chamado para proteger a mata. A próxima parte da aventura será desenvolvida a partir deste encontro.", WIDTH / 2 - 172, 293, 345, 29, ink());
-        g.setFont(normal(15)); centered(g, "Enter ou Esc para voltar ao lobby", WIDTH / 2, 536);
+        drawMenuBackground(g);
+        shade(g, 145);
+        card(g, WIDTH / 2 - 334, 137, 668, 446);
+
+        // Título
+        g.setColor(ink());
+        g.setFont(font(31));
+        centered(
+            g,
+            "FASE DE TESTE CONCLUÍDA",
+            WIDTH / 2,
+            204
+        );
+
+        // Texto da conclusão
+        g.setFont(normal(19));
+        drawWrapped(
+            g,
+            "Você encontrou o Curupira e recebeu o chamado para proteger a mata. "
+                + "A próxima parte da aventura será desenvolvida a partir deste encontro.",
+            WIDTH / 2 - 172,
+            293,
+            345,
+            29,
+            ink()
+        );
+
+        // Curupira abaixo do texto
+        if (curupira != null) {
+            int curupiraWidth = 100;
+            int curupiraHeight = 123;
+
+            int curupiraX = WIDTH / 2 - curupiraWidth / 2;
+            int curupiraY = 405;
+
+            g.drawImage(
+                curupira,
+                curupiraX,
+                curupiraY,
+                curupiraWidth,
+                curupiraHeight,
+                this
+            );
+        }
+
+        // Instrução para voltar ao lobby
+        g.setFont(normal(15));
+        centered(
+            g,
+            "Enter ou Esc para voltar ao lobby",
+            WIDTH / 2,
+            550
+        );
     }
 
     private void drawOption(Graphics2D g, String label, int y, boolean active, int x, int width) {
@@ -435,9 +795,9 @@ final class GamePanel extends JPanel implements KeyListener {
 
     private void interact() {
         if (session.scene() == Scene.CABIN_APPROACH && distance(session.playerX(), session.playerY(), 950, 440) < 118) {
-            session.setStage(Stage.TALK_TO_CURUPIRA); changeScene(Scene.CABIN_INTERIOR, 180f, 540f); return;
+            session.setStage(Stage.TALK_TO_CURUPIRA); changeScene(Scene.CABIN_INTERIOR, 700f, 570f); return;
         }
-        if (session.scene() == Scene.CABIN_INTERIOR && distance(session.playerX(), session.playerY(), 764, 365) < 128) {
+        if (session.scene() == Scene.CABIN_INTERIOR && distance(session.playerX(), session.playerY(), 555, 520) < 128) {
             openDialogue(lines("Curupira", "Você não deveria estar aqui, " + session.playerName() + ".", session.playerName(), "Eu não vim para destruir a floresta. Quero aprender a protegê-la.", "Curupira", "Então escute a mata. A floresta não precisa de heróis; precisa de quem esteja disposto a defendê-la."), new Runnable() {
                 @Override public void run() { session.setStage(Stage.COMPLETE); saves.save(session); screen = Screen.END; }
             });
@@ -458,17 +818,87 @@ final class GamePanel extends JPanel implements KeyListener {
     private void showToast(String message) { toast = message; toastFrames = 100; }
 
     private void handleMenu(int key) {
-        if (up(key)) menuIndex = (menuIndex + 5) % 6; else if (down(key)) menuIndex = (menuIndex + 1) % 6; else if (confirm(key)) {
-            if (menuIndex == 0) { slotIndex = 0; screen = Screen.SLOT_SELECT; }
-            else if (menuIndex == 1 || menuIndex == 2) load(menuIndex);
-            else if (menuIndex == 3) { settingsReturn = Screen.MENU; screen = Screen.SETTINGS; }
-            else if (menuIndex == 4) screen = Screen.EXTRAS;
-            else System.exit(0);
+         if (up(key)) {
+            menuIndex = (menuIndex + 3) % 4;
+
+        } else if (down(key)) {
+            menuIndex = (menuIndex + 1) % 4;
+
+        } else if (confirm(key)) {
+
+            if (menuIndex == 0) {
+
+                // Novo jogo.
+                loadingSave = false;
+                slotIndex = 0;
+                screen = Screen.SLOT_SELECT;
+
+            } else if (menuIndex == 1) {
+
+                // Continuar jogo salvo.
+                loadingSave = true;
+                slotIndex = 0;
+                screen = Screen.SLOT_SELECT;
+
+            } else if (menuIndex == 2) {
+
+                settingsReturn = Screen.MENU;
+                screen = Screen.SETTINGS;
+
+            } else {
+
+                System.exit(0);
+            }
         }
     }
 
-    private void load(int slot) { GameSession loaded = saves.load(slot); if (loaded == null) { showToast("O slot " + slot + " está vazio."); return; } session = loaded; screen = Screen.WORLD; beginTransition(null); }
-    private void handleSlots(int key) { if (up(key) || down(key)) slotIndex = 1 - slotIndex; else if (confirm(key)) { typedName = ""; screen = Screen.NAME_INPUT; } else if (key == KeyEvent.VK_ESCAPE) screen = Screen.MENU; }
+    private void load(int slot) {
+
+        GameSession loaded = saves.load(slot);
+
+        if (loaded == null) {
+
+            showToast(
+                "O slot " + slot + " está vazio."
+            );
+
+            return;
+        }
+
+        session = loaded;
+        loadingSave = false;
+
+        screen = Screen.WORLD;
+
+        beginTransition(null);
+    }
+    
+    private void handleSlots(int key) {
+
+        if (up(key) || down(key)) {
+
+            slotIndex = 1 - slotIndex;
+
+        } else if (confirm(key)) {
+
+            int slot = slotIndex + 1;
+
+            if (loadingSave) {
+
+                load(slot);
+
+            } else {
+
+                typedName = "";
+                screen = Screen.NAME_INPUT;
+            }
+
+        } else if (key == KeyEvent.VK_ESCAPE) {
+
+            screen = Screen.MENU;
+        }
+    }
+
     private void handleName(int key) { if (key == KeyEvent.VK_BACK_SPACE && !typedName.isEmpty()) typedName = typedName.substring(0, typedName.length() - 1); else if (confirm(key)) startNew(); else if (key == KeyEvent.VK_ESCAPE) screen = Screen.SLOT_SELECT; }
     private void handlePause(int key) { if (key == KeyEvent.VK_ESCAPE) { screen = Screen.WORLD; return; } if (up(key)) pauseIndex = (pauseIndex + 4) % 5; else if (down(key)) pauseIndex = (pauseIndex + 1) % 5; else if (confirm(key)) { if (pauseIndex == 0) screen = Screen.WORLD; else if (pauseIndex == 1) { saves.save(session); showToast("Progresso salvo."); screen = Screen.WORLD; } else if (pauseIndex == 2) { settingsReturn = Screen.PAUSE; screen = Screen.SETTINGS; } else if (pauseIndex == 3) { saves.save(session); screen = Screen.MENU; } else { saves.save(session); System.exit(0); } } }
     private void handleSettings(int key) { if (up(key) || down(key)) settingsIndex = 1 - settingsIndex; else if (key == KeyEvent.VK_LEFT || key == KeyEvent.VK_A) changeSetting(-1); else if (key == KeyEvent.VK_RIGHT || key == KeyEvent.VK_D || confirm(key)) changeSetting(1); else if (key == KeyEvent.VK_ESCAPE) screen = settingsReturn; }
@@ -478,6 +908,35 @@ final class GamePanel extends JPanel implements KeyListener {
         int key = event.getKeyCode();
         if (screen == Screen.WORLD && movement(key)) heldKeys.add(key);
         if (screen == Screen.MENU) handleMenu(key); else if (screen == Screen.SLOT_SELECT) handleSlots(key); else if (screen == Screen.NAME_INPUT) handleName(key); else if (screen == Screen.WORLD) { if (key == KeyEvent.VK_E) interact(); else if (key == KeyEvent.VK_M) screen = Screen.MAP; else if (key == KeyEvent.VK_F5) { saves.save(session); showToast("Progresso salvo."); } else if (key == KeyEvent.VK_ESCAPE) { heldKeys.clear(); pauseIndex = 0; screen = Screen.PAUSE; } } else if (screen == Screen.DIALOGUE && confirm(key)) advanceDialogue(); else if (screen == Screen.MAP && (key == KeyEvent.VK_ESCAPE || key == KeyEvent.VK_M)) screen = Screen.WORLD; else if (screen == Screen.PAUSE) handlePause(key); else if (screen == Screen.SETTINGS) handleSettings(key); else if (screen == Screen.EXTRAS && (confirm(key) || key == KeyEvent.VK_ESCAPE)) screen = Screen.MENU; else if (screen == Screen.END && (confirm(key) || key == KeyEvent.VK_ESCAPE)) screen = Screen.MENU;
+    }
+
+    @Override
+    public void mouseClicked(MouseEvent event) {
+        if (screen != Screen.MENU) return;
+
+        double x = (event.getX() - offsetX) / scale;
+        double y = (event.getY() - offsetY) / scale;
+
+        if (insideHelpButton(x, y)) {
+            screen = Screen.EXTRAS;
+            repaint();
+        }
+    }
+
+    @Override
+    public void mousePressed(MouseEvent event) {
+    }
+
+    @Override
+    public void mouseReleased(MouseEvent event) {
+    }
+
+    @Override
+    public void mouseEntered(MouseEvent event) {
+    }
+
+    @Override
+    public void mouseExited(MouseEvent event) {
     }
 
     @Override public void keyReleased(KeyEvent event) { heldKeys.remove(event.getKeyCode()); }

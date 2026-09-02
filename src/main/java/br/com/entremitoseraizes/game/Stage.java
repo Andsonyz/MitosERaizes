@@ -1,7 +1,7 @@
-package br.com.entremitoseraizes;
+package br.com.entremitoseraizes.game;
 
 /** Cada etapa corresponde a uma mecânica apresentada na proposta da fase. */
-enum Stage {
+public enum Stage {
     FIND_CABIN("Siga a trilha até a cabana do Curupira."),
     TALK_TO_CURUPIRA("Entre na cabana e converse com o Curupira."),
     COMPLETE("Fase concluída.");

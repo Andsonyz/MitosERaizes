@@ -1,4 +1,4 @@
-package br.com.entremitoseraizes;
+package br.com.entremitoseraizes.game;
 
 /** Telas possíveis no ciclo principal. */
 enum Screen {

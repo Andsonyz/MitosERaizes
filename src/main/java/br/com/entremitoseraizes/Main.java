@@ -3,6 +3,8 @@ package br.com.entremitoseraizes;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 
+import br.com.entremitoseraizes.game.GameWindow;
+
 /** Ponto de entrada do jogo. */
 public final class Main {
     private Main() { }

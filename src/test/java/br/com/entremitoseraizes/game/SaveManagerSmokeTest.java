@@ -1,4 +1,4 @@
-package br.com.entremitoseraizes;
+package br.com.entremitoseraizes.game;
 
 import java.io.File;
 

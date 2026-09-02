@@ -1,4 +1,4 @@
-package br.com.entremitoseraizes;
+package br.com.entremitoseraizes.game;
 
 /** Verifica o estado principal da fase sem abrir a janela Swing. */
 public final class GameSessionSmokeTest {

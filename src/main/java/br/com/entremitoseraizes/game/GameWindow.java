@@ -1,4 +1,4 @@
-package br.com.entremitoseraizes;
+package br.com.entremitoseraizes.game;
 
 import java.awt.Dimension;
 import java.awt.GraphicsEnvironment;
@@ -7,11 +7,11 @@ import java.awt.event.WindowEvent;
 
 import javax.swing.JFrame;
 
-final class GameWindow extends JFrame {
+public final class GameWindow extends JFrame {
 
     private static final long serialVersionUID = 1L;
 
-    GameWindow() {
+    public GameWindow() {
 
         super("Entre Mitos e Raízes");
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
