@@ -2,6 +2,7 @@ package br.com.entremitoseraizes.game;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.AlphaComposite;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontMetrics;
@@ -60,9 +61,12 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
     private BufferedImage sair;
     private BufferedImage helpButton;
     private BufferedImage curupira;
-    private BufferedImage gregIdle;
-    private BufferedImage gregWalkPart1;
-    private BufferedImage gregWalkPart2;
+    private BufferedImage gregIdleLeft;
+    private BufferedImage gregIdleRight;
+    private BufferedImage gregWalkLeftPart1;
+    private BufferedImage gregWalkLeftPart2;
+    private BufferedImage gregWalkRightPart1;
+    private BufferedImage gregWalkRightPart2;
     private BufferedImage menuFallback;
     private ImageIcon menuAnimation;
     private GameSession session = new GameSession();
@@ -76,6 +80,10 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
     private List<DialogueLine> dialogue = new ArrayList<DialogueLine>();
     private int dialogueIndex;
     private Runnable dialogueFinish;
+    private Runnable dialogueExit;
+    private Scene dialogueReturnScene;
+    private long dialogueAutoAdvanceAt;
+    private boolean dialogueShowsCharacters;
     private long previousTick = System.nanoTime();
     private int animationFrame;
     private int walkingFrame;
@@ -84,6 +92,7 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
     private boolean helpButtonHovered;
     private boolean loadingSave;
     private boolean gregIsWalking;
+    private int gregDirection = 1;
     private int transitionFrame = -1;
     private Runnable transitionAction;
     private String toast = "";
@@ -112,6 +121,12 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
         double y = (event.getY() - offsetY) / scale;
 
         helpButtonHovered = insideHelpButton(x, y);
+        for (int index = 0; index < 4; index++) {
+            if (insideMenuButton(x, y, index)) {
+                menuIndex = index;
+                break;
+            }
+        }
     }
 
     @Override
@@ -139,9 +154,12 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
         sair = loadImage("Cenarios", "Sair.png");
         helpButton = loadImage("Cenarios", "Interrogacao.png");
         curupira = loadImage("Personagens", "CURUPIRA.PNG");
-        gregIdle = loadImage("Greg", "GregParado.png");
-        gregWalkPart1 = loadImage("Greg", "GregAndandoPT1.png");
-        gregWalkPart2 = loadImage("Greg", "GregAndandoPT2.png");
+        gregIdleLeft = loadImage("Greg", "GregParadoE.png");
+        gregIdleRight = loadImage("Greg", "GregParadoD.png");
+        gregWalkLeftPart1 = loadImage("Greg", "GregAndandoEPT1.png");
+        gregWalkLeftPart2 = loadImage("Greg", "GregAndandoEPT2.png");
+        gregWalkRightPart1 = loadImage("Greg", "GregAndandoDPT1.png");
+        gregWalkRightPart2 = loadImage("Greg", "GregAndandoDPT2.png");
         File gif = asset("Cenarios", "MENU_loop.gif");
         if (gif.isFile() && !Boolean.getBoolean("entremitos.test.noGif")) {
             menuAnimation = new ImageIcon(gif.getAbsolutePath());
@@ -190,11 +208,15 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
         }
 
         if (toastFrames > 0) toastFrames--;
+        if (screen == Screen.DIALOGUE && dialogueAutoAdvanceAt > 0 && System.currentTimeMillis() >= dialogueAutoAdvanceAt) {
+            dialogueAutoAdvanceAt = 0L;
+            advanceDialogue();
+        }
         if (transitionFrame >= 0) {
             transitionFrame++;
             if (transitionFrame == 18 && transitionAction != null) transitionAction.run();
             if (transitionFrame >= 36) { transitionFrame = -1; transitionAction = null; }
-        } else if (screen == Screen.WORLD) movePlayer(delta);
+        } else if (screen == Screen.WORLD && session.scene() != Scene.CABIN_INTERIOR) movePlayer(delta);
         repaint();
     }
 
@@ -206,6 +228,8 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
             walkingFrame = 0;
             return;
         }
+        if (dx < 0f) gregDirection = -1;
+        else if (dx > 0f) gregDirection = 1;
         gregIsWalking = true;
         walkingFrame++;
         float diagonal = dx != 0f && dy != 0f ? 0.7071f : 1f;
@@ -231,6 +255,9 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
                 session.setScene(next);
                 session.setPosition(x, y);
                 saves.save(session);
+                if (next == Scene.CABIN_INTERIOR) {
+                    openCurupiraDialogue(Scene.CABIN_APPROACH);
+                }
             }
         });
     }
@@ -271,6 +298,10 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
 
             drawSettings(g);
 
+        } else if (screen == Screen.CONTROLS) {
+
+            drawControls(g);
+
         } else if (screen == Screen.EXTRAS) {
 
             drawExtras(g);
@@ -306,9 +337,6 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
     }
 
     private void drawMenuBackground(Graphics2D g) {
-        if (menuFallback != null) g.drawImage(menuFallback, 0, 0, WIDTH, HEIGHT, this);
-        else { g.setColor(c(0x244B3B)); g.fillRect(0, 0, WIDTH, HEIGHT); }
-        // O quadro estático por baixo elimina o brilho entre frames do GIF carregado.
         if (menuAnimation != null) {
             g.drawImage(
                 menuAnimation.getImage(),
@@ -427,6 +455,12 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
         && y <= helpButtonY() + HELP_BUTTON_SIZE;
     
     }
+
+    private boolean insideMenuButton(double x, double y, int index) {
+        int buttonX = 86;
+        int buttonY = 264 + index * 58;
+        return x >= buttonX && x <= buttonX + 260 && y >= buttonY && y <= buttonY + 130;
+    }
     private void drawSlots(Graphics2D g) {
         drawMenuBackground(g); shade(g, 140); card(g, WIDTH / 2 - 338, 128, 676, 462);
         g.setColor(ink()); g.setFont(font(29)); centered(g, "ESCOLHA UM SLOT", WIDTH / 2, 188);
@@ -506,9 +540,9 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
     private void drawImageScene(Graphics2D g, BufferedImage image, String label, String help) {
         if (image != null) g.drawImage(image, 0, 0, WIDTH, HEIGHT, this);
         else { g.setColor(c(0x274D3A)); g.fillRect(0, 0, WIDTH, HEIGHT); }
-        drawSceneCaption(g, label, help);
+        drawSceneCaption(g, label, session.scene() == Scene.FOREST_PATH ? help : "");
         if (session.scene() == Scene.FOREST_PATH) edgeArrow(g, WIDTH - 42, HEIGHT / 2, "→");
-        drawGreg(g);
+        if (session.scene() != Scene.CABIN_INTERIOR) drawGreg(g);
     }
 
     private void drawCabinApproach(Graphics2D g) {
@@ -522,11 +556,9 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
     }
 
     private void drawCabinInterior(Graphics2D g) {
-        drawImageScene(g, cabinInterior, "Cenário 3/3  •  Dentro da cabana", "Aproxime-se do Curupira e pressione E. Vá à direita para sair.");
+        drawImageScene(g, cabinInterior, "Cenário 3/3  •  Dentro da cabana", "");
         int curupiraX = 500, curupiraY = 430;
         drawCurupira(g, curupiraX, curupiraY, 130, 158);
-        edgeArrow(g, WIDTH - 42, HEIGHT / 2, "→");
-        if (distance(session.playerX(), session.playerY(), curupiraX + 44, curupiraY + 90) < 128) bubble(g, curupiraX + 45, curupiraY - 20, "E");
     }
 
     private void drawSceneCaption(Graphics2D g, String titleText, String help) {
@@ -536,12 +568,16 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
     }
 
     private void drawGreg(Graphics2D g) {
-        BufferedImage sprite = gregIdle;
+        BufferedImage sprite = gregDirection < 0 ? gregIdleLeft : gregIdleRight;
         if (gregIsWalking) {
-            // Dois quadros alternados tornam o passo visível sem trocar de posição do sprite.
             boolean secondStep = (walkingFrame / 8) % 2 == 1;
-            sprite = secondStep && gregWalkPart2 != null ? gregWalkPart2 : gregWalkPart1;
+            if (gregDirection < 0) {
+                sprite = secondStep && gregWalkLeftPart2 != null ? gregWalkLeftPart2 : gregWalkLeftPart1;
+            } else {
+                sprite = secondStep && gregWalkRightPart2 != null ? gregWalkRightPart2 : gregWalkRightPart1;
+            }
         }
+        if (sprite == null) sprite = gregDirection < 0 ? gregIdleRight : gregIdleLeft;
         int w = 74, h = 132;
         int x = (int) session.playerX() - w / 2;
         int y = (int) session.playerY() - h + 22;
@@ -566,10 +602,29 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
         shade(g, 110);
         if (dialogue.isEmpty()) return;
         DialogueLine line = dialogue.get(dialogueIndex);
-        g.setColor(paper()); g.fillRoundRect(WIDTH / 2 - 530, 492, 1060, 184, 13, 13); g.setColor(outline()); g.setStroke(new BasicStroke(4)); g.drawRoundRect(WIDTH / 2 - 530, 492, 1060, 184, 13, 13);
-        g.setColor(selected()); g.fillRoundRect(WIDTH / 2 - 512, 472, 255, 41, 8, 8); g.setColor(Color.WHITE); g.setFont(font(20)); centered(g, line.speaker, WIDTH / 2 - 384, 500);
-        g.setColor(ink()); g.setFont(normal(21)); drawWrapped(g, line.text, WIDTH / 2 - 480, 550, 960, 29, ink());
-        g.setFont(normal(13)); g.setColor(outline()); centered(g, "Enter / Espaço para continuar", WIDTH / 2, 652);
+        int boxX = WIDTH / 2 - 530;
+        if (dialogueShowsCharacters) drawDialogueCharacters(g, line.speaker);
+        g.setColor(new Color(28, 57, 42, 242)); g.fillRoundRect(boxX, 392, 1060, 270, 18, 18);
+        g.setColor(c(0xE7C98A)); g.setStroke(new BasicStroke(4)); g.drawRoundRect(boxX, 392, 1060, 270, 18, 18);
+        g.setColor(selected()); g.fillRoundRect(WIDTH / 2 - 128, 402, 256, 44, 10, 10);
+        g.setColor(Color.WHITE); g.setFont(font(20)); centered(g, line.speaker, WIDTH / 2, 403);
+        g.setColor(c(0xFFF3C1)); g.setFont(normal(21)); drawWrapped(g, line.text, WIDTH / 2 - 465, 490, 930, 30, c(0xFFF3C1));
+        g.setFont(normal(13)); centered(g, "Enter / Espaço para continuar   •   Esc para sair", WIDTH / 2, 600);
+    }
+
+    private void drawDialogueCharacters(Graphics2D g, String speaker) {
+        boolean curupiraSpeaking = "Curupira".equalsIgnoreCase(speaker);
+        BufferedImage greg = gregDirection < 0 ? gregIdleLeft : gregIdleRight;
+        drawDialogueCharacter(g, greg, 90, 205, 250, 430, !curupiraSpeaking);
+        drawDialogueCharacter(g, curupira, 940, 180, 250, 455, curupiraSpeaking);
+    }
+
+    private void drawDialogueCharacter(Graphics2D g, BufferedImage image, int x, int y, int width, int height, boolean focused) {
+        if (image == null) return;
+        java.awt.Composite previous = g.getComposite();
+        g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, focused ? 1.0f : 0.32f));
+        g.drawImage(image, x, y, width, height, this);
+        g.setComposite(previous);
     }
 
     private void drawPause(Graphics2D g) {
@@ -598,9 +653,22 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
 
     private void drawSettings(Graphics2D g) {
         drawMenuBackground(g); shade(g, 140); card(g, WIDTH / 2 - 306, 150, 612, 410); g.setColor(ink()); g.setFont(font(28)); centered(g, "CONFIGURAÇÕES", WIDTH / 2, 210);
-        String[] labels = { "Tamanho do texto", "Alto contraste" }; String[] values = { accessibility.textSizeName(), accessibility.highContrast() ? "Ativado" : "Desativado" };
-        for (int i = 0; i < 2; i++) { int y = 260 + i * 94; boolean active = i == settingsIndex; g.setColor(active ? selected() : c(0xDDE9BE)); g.fillRoundRect(WIDTH / 2 - 256, y, 512, 71, 8, 8); g.setColor(active && !accessibility.highContrast() ? Color.WHITE : ink()); g.setFont(font(19)); centered(g, labels[i], WIDTH / 2, y + 30); g.setFont(normal(15)); centered(g, "◀   " + values[i] + "   ▶", WIDTH / 2, y + 55); }
+        String[] labels = { "Tamanho do texto", "Alto contraste", "Controles" }; String[] values = { accessibility.textSizeName(), accessibility.highContrast() ? "Ativado" : "Desativado", "Abrir tutorial" };
+        for (int i = 0; i < 3; i++) { int y = 220 + i * 94; boolean active = i == settingsIndex; g.setColor(active ? selected() : c(0xDDE9BE)); g.fillRoundRect(WIDTH / 2 - 256, y, 512, 71, 8, 8); g.setColor(active && !accessibility.highContrast() ? Color.WHITE : ink()); g.setFont(font(19)); centered(g, labels[i], WIDTH / 2, y + 30); g.setFont(normal(15)); centered(g, "◀   " + values[i] + "   ▶", WIDTH / 2, y + 55); }
         g.setColor(ink()); g.setFont(normal(14)); centered(g, "↑ ↓ escolhe • ← → ou Enter altera • Esc volta", WIDTH / 2, 512);
+    }
+
+    private void drawControls(Graphics2D g) {
+        drawMenuBackground(g); shade(g, 140); card(g, WIDTH / 2 - 350, 90, 700, 540);
+        g.setColor(ink()); g.setFont(font(29)); centered(g, "CONTROLES", WIDTH / 2, 145);
+        g.setFont(normal(18));
+        centered(g, "WASD / Setas  —  Mover o personagem", WIDTH / 2, 220);
+        centered(g, "E  —  Interagir", WIDTH / 2, 265);
+        centered(g, "M  —  Abrir o mapa", WIDTH / 2, 310);
+        centered(g, "F5  —  Salvar o progresso", WIDTH / 2, 355);
+        centered(g, "Esc  —  Voltar / abrir o menu", WIDTH / 2, 400);
+        centered(g, "Enter / Espaço  —  Confirmar / avançar", WIDTH / 2, 445);
+        g.setFont(normal(14)); centered(g, "Esc para voltar", WIDTH / 2, 580);
     }
 
     private void drawExtras(Graphics2D g) {
@@ -797,23 +865,67 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
         if (session.scene() == Scene.CABIN_APPROACH && distance(session.playerX(), session.playerY(), 950, 440) < 118) {
             session.setStage(Stage.TALK_TO_CURUPIRA); changeScene(Scene.CABIN_INTERIOR, 700f, 570f); return;
         }
-        if (session.scene() == Scene.CABIN_INTERIOR && distance(session.playerX(), session.playerY(), 555, 520) < 128) {
-            openDialogue(lines("Curupira", "Você não deveria estar aqui, " + session.playerName() + ".", session.playerName(), "Eu não vim para destruir a floresta. Quero aprender a protegê-la.", "Curupira", "Então escute a mata. A floresta não precisa de heróis; precisa de quem esteja disposto a defendê-la."), new Runnable() {
-                @Override public void run() { session.setStage(Stage.COMPLETE); saves.save(session); screen = Screen.END; }
-            });
-        } else showToast("Aproxime-se da porta ou do Curupira para interagir.");
+        if (session.scene() == Scene.CABIN_INTERIOR) showToast("O diálogo da cabana já foi iniciado.");
+        else showToast("Aproxime-se da porta para interagir.");
     }
 
     private void startNew() {
         session.startNew(typedName, slotIndex + 1); saves.save(session);
         openDialogue(lines("Narradora", "Há muito tempo, histórias são contadas sobre seres que vivem nas florestas brasileiras.", "Narradora", session.playerName() + " chega à borda da mata. Um assobio distante anuncia que o Curupira está por perto."), new Runnable() {
             @Override public void run() { screen = Screen.WORLD; beginTransition(null); }
-        });
+        }, null, false, 5000L);
     }
 
-    private void openDialogue(DialogueLine[] lines, Runnable finish) { heldKeys.clear(); dialogue = new ArrayList<DialogueLine>(Arrays.asList(lines)); dialogueIndex = 0; dialogueFinish = finish; screen = Screen.DIALOGUE; }
+    private void openDialogue(DialogueLine[] lines, Runnable finish) {
+        openDialogue(lines, finish, null);
+    }
+
+    private void openDialogue(DialogueLine[] lines, Runnable finish, Runnable exit) {
+        openDialogue(lines, finish, exit, true, 0L);
+    }
+
+    private void openDialogue(DialogueLine[] lines, Runnable finish, Runnable exit, boolean showsCharacters, long autoAdvanceMillis) {
+        heldKeys.clear();
+        dialogue = new ArrayList<DialogueLine>(Arrays.asList(lines));
+        dialogueIndex = 0;
+        dialogueFinish = finish;
+        dialogueExit = exit;
+        dialogueReturnScene = session.scene();
+        dialogueShowsCharacters = showsCharacters;
+        dialogueAutoAdvanceAt = autoAdvanceMillis > 0 ? System.currentTimeMillis() + autoAdvanceMillis : 0L;
+        screen = Screen.DIALOGUE;
+    }
+
+    private void openCurupiraDialogue(final Scene previousScene) {
+        openDialogue(
+            lines("Curupira", "Você não deveria estar aqui, " + session.playerName() + ".", session.playerName(), "Eu não vim para destruir a floresta. Quero aprender a protegê-la.", "Curupira", "Então escute a mata. A floresta não precisa de heróis; precisa de quem esteja disposto a defendê-la."),
+            new Runnable() {
+                @Override public void run() { session.setStage(Stage.COMPLETE); session.setScene(previousScene); session.setPosition(900f, 520f); saves.save(session); screen = Screen.WORLD; }
+            },
+            new Runnable() {
+                @Override public void run() {
+                    session.setScene(previousScene);
+                    session.setPosition(900f, 520f);
+                    screen = Screen.WORLD;
+                }
+            }
+        );
+    }
+
+    private void exitDialogue() {
+        Runnable exit = dialogueExit;
+        dialogueAutoAdvanceAt = 0L;
+        dialogueExit = null;
+        dialogueFinish = null;
+        dialogue.clear();
+        if (exit != null) exit.run();
+        else {
+            session.setScene(dialogueReturnScene);
+            screen = Screen.WORLD;
+        }
+    }
     private DialogueLine[] lines(String... source) { List<DialogueLine> result = new ArrayList<DialogueLine>(); for (int i = 0; i + 1 < source.length; i += 2) result.add(new DialogueLine(source[i], source[i + 1])); return result.toArray(new DialogueLine[result.size()]); }
-    private void advanceDialogue() { if (dialogueIndex + 1 < dialogue.size()) { dialogueIndex++; return; } Runnable finish = dialogueFinish; dialogueFinish = null; if (finish != null) finish.run(); else screen = Screen.WORLD; }
+    private void advanceDialogue() { dialogueAutoAdvanceAt = 0L; if (dialogueIndex + 1 < dialogue.size()) { dialogueIndex++; return; } Runnable finish = dialogueFinish; dialogueFinish = null; if (finish != null) finish.run(); else screen = Screen.WORLD; }
     private void beginTransition(Runnable action) { heldKeys.clear(); transitionFrame = 0; transitionAction = action; }
     private void showToast(String message) { toast = message; toastFrames = 100; }
 
@@ -870,7 +982,13 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
 
         screen = Screen.WORLD;
 
-        beginTransition(null);
+        beginTransition(new Runnable() {
+            @Override public void run() {
+                if (session.scene() == Scene.CABIN_INTERIOR) {
+                    openCurupiraDialogue(Scene.CABIN_APPROACH);
+                }
+            }
+        });
     }
     
     private void handleSlots(int key) {
@@ -901,13 +1019,13 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
 
     private void handleName(int key) { if (key == KeyEvent.VK_BACK_SPACE && !typedName.isEmpty()) typedName = typedName.substring(0, typedName.length() - 1); else if (confirm(key)) startNew(); else if (key == KeyEvent.VK_ESCAPE) screen = Screen.SLOT_SELECT; }
     private void handlePause(int key) { if (key == KeyEvent.VK_ESCAPE) { screen = Screen.WORLD; return; } if (up(key)) pauseIndex = (pauseIndex + 4) % 5; else if (down(key)) pauseIndex = (pauseIndex + 1) % 5; else if (confirm(key)) { if (pauseIndex == 0) screen = Screen.WORLD; else if (pauseIndex == 1) { saves.save(session); showToast("Progresso salvo."); screen = Screen.WORLD; } else if (pauseIndex == 2) { settingsReturn = Screen.PAUSE; screen = Screen.SETTINGS; } else if (pauseIndex == 3) { saves.save(session); screen = Screen.MENU; } else { saves.save(session); System.exit(0); } } }
-    private void handleSettings(int key) { if (up(key) || down(key)) settingsIndex = 1 - settingsIndex; else if (key == KeyEvent.VK_LEFT || key == KeyEvent.VK_A) changeSetting(-1); else if (key == KeyEvent.VK_RIGHT || key == KeyEvent.VK_D || confirm(key)) changeSetting(1); else if (key == KeyEvent.VK_ESCAPE) screen = settingsReturn; }
-    private void changeSetting(int direction) { if (settingsIndex == 0) { if (direction < 0) accessibility.decreaseText(); else accessibility.increaseText(); } else accessibility.toggleContrast(); }
+    private void handleSettings(int key) { if (up(key) || down(key)) settingsIndex = (settingsIndex + (down(key) ? 1 : 2)) % 3; else if (settingsIndex == 2 && confirm(key)) screen = Screen.CONTROLS; else if (key == KeyEvent.VK_LEFT || key == KeyEvent.VK_A) changeSetting(-1); else if (key == KeyEvent.VK_RIGHT || key == KeyEvent.VK_D || confirm(key)) changeSetting(1); else if (key == KeyEvent.VK_ESCAPE) screen = settingsReturn; }
+    private void changeSetting(int direction) { if (settingsIndex == 0) { if (direction < 0) accessibility.decreaseText(); else accessibility.increaseText(); } else if (settingsIndex == 1) accessibility.toggleContrast(); }
 
     @Override public void keyPressed(KeyEvent event) {
         int key = event.getKeyCode();
         if (screen == Screen.WORLD && movement(key)) heldKeys.add(key);
-        if (screen == Screen.MENU) handleMenu(key); else if (screen == Screen.SLOT_SELECT) handleSlots(key); else if (screen == Screen.NAME_INPUT) handleName(key); else if (screen == Screen.WORLD) { if (key == KeyEvent.VK_E) interact(); else if (key == KeyEvent.VK_M) screen = Screen.MAP; else if (key == KeyEvent.VK_F5) { saves.save(session); showToast("Progresso salvo."); } else if (key == KeyEvent.VK_ESCAPE) { heldKeys.clear(); pauseIndex = 0; screen = Screen.PAUSE; } } else if (screen == Screen.DIALOGUE && confirm(key)) advanceDialogue(); else if (screen == Screen.MAP && (key == KeyEvent.VK_ESCAPE || key == KeyEvent.VK_M)) screen = Screen.WORLD; else if (screen == Screen.PAUSE) handlePause(key); else if (screen == Screen.SETTINGS) handleSettings(key); else if (screen == Screen.EXTRAS && (confirm(key) || key == KeyEvent.VK_ESCAPE)) screen = Screen.MENU; else if (screen == Screen.END && (confirm(key) || key == KeyEvent.VK_ESCAPE)) screen = Screen.MENU;
+        if (screen == Screen.MENU) handleMenu(key); else if (screen == Screen.SLOT_SELECT) handleSlots(key); else if (screen == Screen.NAME_INPUT) handleName(key); else if (screen == Screen.WORLD) { if (key == KeyEvent.VK_E) interact(); else if (key == KeyEvent.VK_M) screen = Screen.MAP; else if (key == KeyEvent.VK_F5) { saves.save(session); showToast("Progresso salvo."); } else if (key == KeyEvent.VK_ESCAPE) { heldKeys.clear(); pauseIndex = 0; screen = Screen.PAUSE; } } else if (screen == Screen.DIALOGUE && key == KeyEvent.VK_ESCAPE) exitDialogue(); else if (screen == Screen.DIALOGUE && confirm(key)) advanceDialogue(); else if (screen == Screen.MAP && (key == KeyEvent.VK_ESCAPE || key == KeyEvent.VK_M)) screen = Screen.WORLD; else if (screen == Screen.PAUSE) handlePause(key); else if (screen == Screen.SETTINGS) handleSettings(key); else if (screen == Screen.CONTROLS && key == KeyEvent.VK_ESCAPE) screen = settingsReturn; else if (screen == Screen.EXTRAS && (confirm(key) || key == KeyEvent.VK_ESCAPE)) screen = Screen.MENU; else if (screen == Screen.END && (confirm(key) || key == KeyEvent.VK_ESCAPE)) screen = Screen.MENU;
     }
 
     @Override
@@ -920,6 +1038,15 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
         if (insideHelpButton(x, y)) {
             screen = Screen.EXTRAS;
             repaint();
+        } else {
+            for (int index = 0; index < 4; index++) {
+                if (insideMenuButton(x, y, index)) {
+                    menuIndex = index;
+                    handleMenu(KeyEvent.VK_ENTER);
+                    repaint();
+                    break;
+                }
+            }
         }
     }
 
