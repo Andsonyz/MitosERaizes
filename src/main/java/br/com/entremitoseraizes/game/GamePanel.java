@@ -20,6 +20,8 @@ import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.nio.channels.SeekableByteChannel;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -69,6 +71,11 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
     private BufferedImage gregWalkRightPart2;
     private BufferedImage menuFallback;
     private ImageIcon menuAnimation;
+    private File menuVideo;
+    private Object videoGrab;
+    private SeekableByteChannel videoChannel;
+    private BufferedImage menuVideoFrame;
+    private long nextVideoFrameAt;
     private GameSession session = new GameSession();
     private Screen screen = Screen.MENU;
     private Screen settingsReturn = Screen.MENU;
@@ -160,9 +167,10 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
         gregWalkLeftPart2 = loadImage("Greg", "GregAndandoEPT2.png");
         gregWalkRightPart1 = loadImage("Greg", "GregAndandoDPT1.png");
         gregWalkRightPart2 = loadImage("Greg", "GregAndandoDPT2.png");
-        File gif = asset("Cenarios", "MENU_loop.gif");
-        if (gif.isFile() && !Boolean.getBoolean("entremitos.test.noGif")) {
-            menuAnimation = new ImageIcon(gif.getAbsolutePath());
+        menuVideo = asset("Cenarios", "MENU_loop.mp4");
+        if (!openMenuVideo()) {
+            File gif = asset("Cenarios", "MENU_loop.gif");
+            if (gif.isFile() && !Boolean.getBoolean("entremitos.test.noGif")) menuAnimation = new ImageIcon(gif.getAbsolutePath());
         }
     }
 
@@ -188,6 +196,54 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
         } catch (IOException ignored) { return null; }
     }
 
+    private boolean openMenuVideo() {
+        if (menuVideo == null || !menuVideo.isFile()) return false;
+        try {
+            Class<?> nioUtils = Class.forName("org.jcodec.common.io.NIOUtils");
+            videoChannel = (SeekableByteChannel) nioUtils.getMethod("readableChannel", File.class).invoke(null, menuVideo);
+            Class<?> frameGrabClass = Class.forName("org.jcodec.api.FrameGrab");
+            videoGrab = frameGrabClass.getMethod("createFrameGrab", SeekableByteChannel.class).invoke(null, videoChannel);
+            nextVideoFrameAt = 0L;
+            return true;
+        } catch (Exception ignored) {
+            closeMenuVideo();
+            return false;
+        }
+    }
+
+    private void closeMenuVideo() {
+        if (videoChannel != null) {
+            try { videoChannel.close(); } catch (IOException ignored) { }
+        }
+        videoChannel = null;
+        videoGrab = null;
+        menuVideoFrame = null;
+    }
+
+    private void updateMenuVideo(long now) {
+        if (videoGrab == null || now < nextVideoFrameAt) return;
+        try {
+            Object picture = videoGrab.getClass().getMethod("getNativeFrame").invoke(videoGrab);
+            if (picture == null) {
+                closeMenuVideo();
+                openMenuVideo();
+                return;
+            }
+            Class<?> awtUtil = Class.forName("org.jcodec.scale.AWTUtil");
+            for (Method method : awtUtil.getMethods()) {
+                if ("toBufferedImage".equals(method.getName())
+                    && method.getParameterTypes().length == 1
+                    && method.getParameterTypes()[0].isAssignableFrom(picture.getClass())) {
+                    menuVideoFrame = (BufferedImage) method.invoke(null, picture);
+                    break;
+                }
+            }
+            nextVideoFrameAt = now + 33_000_000L;
+        } catch (Exception ignored) {
+            closeMenuVideo();
+        }
+    }
+
     private File asset(String folder, String name) { return new File(new File(new File("Image"), folder), name); }
 
     private void tick() {
@@ -206,6 +262,8 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
         } else {
             helpButtonScale += (1.0f - helpButtonScale) * 0.15f;
         }
+
+        if (screen == Screen.MENU) updateMenuVideo(now);
 
         if (toastFrames > 0) toastFrames--;
         if (screen == Screen.DIALOGUE && dialogueAutoAdvanceAt > 0 && System.currentTimeMillis() >= dialogueAutoAdvanceAt) {
@@ -239,8 +297,6 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
             changeScene(Scene.CABIN_APPROACH, 78f, 525f);
         } else if (session.scene() == Scene.CABIN_APPROACH && x <= EDGE) {
             changeScene(Scene.FOREST_PATH, WIDTH - 82f, 525f);
-        } else if (session.scene() == Scene.CABIN_INTERIOR && x >= WIDTH - EDGE) {
-            changeScene(Scene.CABIN_APPROACH, 900f, 520f);
         } else {
             session.setPosition(clamp(x, EDGE, WIDTH - EDGE), y);
         }
@@ -337,7 +393,9 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
     }
 
     private void drawMenuBackground(Graphics2D g) {
-        if (menuAnimation != null) {
+        if (menuVideoFrame != null) {
+            g.drawImage(menuVideoFrame, 0, 0, WIDTH, HEIGHT, this);
+        } else if (menuAnimation != null) {
             g.drawImage(
                 menuAnimation.getImage(),
                 0,
@@ -533,21 +591,17 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
         if (session.scene() == Scene.FOREST_PATH) drawImageScene(g, forestPath, "Cenário 1/3  •  Trilha da floresta", "Vá para a direita para encontrar a cabana.");
         else if (session.scene() == Scene.CABIN_APPROACH) drawCabinApproach(g);
         else drawCabinInterior(g);
-        drawHud(g);
         if (toastFrames > 0) drawToast(g);
     }
 
     private void drawImageScene(Graphics2D g, BufferedImage image, String label, String help) {
         if (image != null) g.drawImage(image, 0, 0, WIDTH, HEIGHT, this);
         else { g.setColor(c(0x274D3A)); g.fillRect(0, 0, WIDTH, HEIGHT); }
-        drawSceneCaption(g, label, session.scene() == Scene.FOREST_PATH ? help : "");
-        if (session.scene() == Scene.FOREST_PATH) edgeArrow(g, WIDTH - 42, HEIGHT / 2, "→");
         if (session.scene() != Scene.CABIN_INTERIOR) drawGreg(g);
     }
 
     private void drawCabinApproach(Graphics2D g) {
         drawImageScene(g, cabinApproach, "Cenário 2/3  •  Entrada da cabana", "Vá à esquerda para voltar à trilha. Aproxime-se da porta e pressione E.");
-        edgeArrow(g, 35, HEIGHT / 2, "←");
         int doorX = 950, doorY = 440;
         if (distance(session.playerX(), session.playerY(), doorX, doorY) < 118) {
             bubble(g, doorX, doorY - 125, "E");
@@ -559,12 +613,6 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
         drawImageScene(g, cabinInterior, "Cenário 3/3  •  Dentro da cabana", "");
         int curupiraX = 500, curupiraY = 430;
         drawCurupira(g, curupiraX, curupiraY, 130, 158);
-    }
-
-    private void drawSceneCaption(Graphics2D g, String titleText, String help) {
-        g.setColor(new Color(8, 25, 23, 190)); g.fillRoundRect(20, 18, 500, 62, 10, 10);
-        g.setColor(c(0xFFF3C1)); g.setFont(font(17)); centered(g, titleText, 20 + 250, 43);
-        g.setFont(normal(13)); centered(g, help, 20 + 250, 65);
     }
 
     private void drawGreg(Graphics2D g) {
@@ -592,24 +640,19 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
         else { g.setColor(c(0xE86A28)); g.fillOval(x, y, w, h); }
     }
 
-    private void drawHud(Graphics2D g) {
-        g.setColor(new Color(8, 25, 23, 190)); g.fillRoundRect(WIDTH / 2 - 175, 18, 350, 62, 10, 10);
-        g.setColor(c(0xFFF3C1)); g.setFont(normal(13)); centered(g, "E interagir • M mapa • F5 salvar • Esc menu", WIDTH / 2, 43);
-        g.setFont(font(14)); centered(g, session.stage().objective(), WIDTH / 2, 67);
-    }
-
     private void drawDialogue(Graphics2D g) {
         shade(g, 110);
         if (dialogue.isEmpty()) return;
         DialogueLine line = dialogue.get(dialogueIndex);
         int boxX = WIDTH / 2 - 530;
         if (dialogueShowsCharacters) drawDialogueCharacters(g, line.speaker);
-        g.setColor(new Color(28, 57, 42, 242)); g.fillRoundRect(boxX, 392, 1060, 270, 18, 18);
-        g.setColor(c(0xE7C98A)); g.setStroke(new BasicStroke(4)); g.drawRoundRect(boxX, 392, 1060, 270, 18, 18);
-        g.setColor(selected()); g.fillRoundRect(WIDTH / 2 - 128, 402, 256, 44, 10, 10);
-        g.setColor(Color.WHITE); g.setFont(font(20)); centered(g, line.speaker, WIDTH / 2, 403);
-        g.setColor(c(0xFFF3C1)); g.setFont(normal(21)); drawWrapped(g, line.text, WIDTH / 2 - 465, 490, 930, 30, c(0xFFF3C1));
-        g.setFont(normal(13)); centered(g, "Enter / Espaço para continuar   •   Esc para sair", WIDTH / 2, 600);
+        boxX = WIDTH / 2 - 460;
+        g.setColor(new Color(28, 57, 42, 242)); g.fillRoundRect(boxX, 438, 920, 190, 18, 18);
+        g.setColor(c(0xE7C98A)); g.setStroke(new BasicStroke(4)); g.drawRoundRect(boxX, 438, 920, 190, 18, 18);
+        g.setColor(selected()); g.fillRoundRect(WIDTH / 2 - 128, 420, 256, 40, 10, 10);
+        g.setColor(Color.WHITE); g.setFont(font(19)); centered(g, line.speaker, WIDTH / 2, 447);
+        g.setColor(c(0xFFF3C1)); g.setFont(normal(20)); drawWrapped(g, line.text, WIDTH / 2 - 390, 505, 780, 28, c(0xFFF3C1));
+        g.setFont(normal(13)); centered(g, "Enter / Espaço para continuar   •   Esc para sair", WIDTH / 2, 602);
     }
 
     private void drawDialogueCharacters(Graphics2D g, String speaker) {
@@ -622,7 +665,7 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
     private void drawDialogueCharacter(Graphics2D g, BufferedImage image, int x, int y, int width, int height, boolean focused) {
         if (image == null) return;
         java.awt.Composite previous = g.getComposite();
-        g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, focused ? 1.0f : 0.32f));
+        g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, focused ? 1.0f : 0.55f));
         g.drawImage(image, x, y, width, height, this);
         g.setComposite(previous);
     }
@@ -850,7 +893,6 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
     }
 
     private void bubble(Graphics2D g, int x, int y, String text) { g.setColor(c(0xFFF0A1)); g.fillRoundRect(x - 15, y - 12, 30, 25, 7, 7); g.setColor(c(0x333A36)); g.setFont(font(17)); centered(g, text, x, y + 7); }
-    private void edgeArrow(Graphics2D g, int x, int y, String text) { g.setColor(new Color(8, 25, 23, 170)); g.fillRoundRect(x - 17, y - 25, 34, 50, 8, 8); g.setColor(c(0xFFF3C1)); g.setFont(font(26)); centered(g, text, x, y + 9); }
     private void drawToast(Graphics2D g) { g.setColor(new Color(8, 25, 23, 220)); g.fillRoundRect(WIDTH / 2 - 231, 104, 462, 38, 8, 8); g.setColor(c(0xFFF3C1)); g.setFont(normal(14)); centered(g, toast, WIDTH / 2, 129); }
     private void shade(Graphics2D g, int alpha) { g.setColor(new Color(0, 0, 0, alpha)); g.fillRect(0, 0, WIDTH, HEIGHT); }
     private void card(Graphics2D g, int x, int y, int w, int h) { g.setColor(paper()); g.fillRoundRect(x, y, w, h, 15, 15); g.setColor(outline()); g.setStroke(new BasicStroke(4)); g.drawRoundRect(x, y, w, h, 15, 15); }
@@ -870,7 +912,9 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
     }
 
     private void startNew() {
-        session.startNew(typedName, slotIndex + 1); saves.save(session);
+        session.startNew(typedName, slotIndex + 1);
+        session.setPosition(100f, 620f);
+        saves.save(session);
         openDialogue(lines("Narradora", "Há muito tempo, histórias são contadas sobre seres que vivem nas florestas brasileiras.", "Narradora", session.playerName() + " chega à borda da mata. Um assobio distante anuncia que o Curupira está por perto."), new Runnable() {
             @Override public void run() { screen = Screen.WORLD; beginTransition(null); }
         }, null, false, 5000L);
