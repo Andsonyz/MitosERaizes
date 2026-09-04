@@ -6,12 +6,15 @@ import java.util.Set;
 
 /** Estado persistente da primeira fase, sem guardar dados pessoais além do apelido escolhido. */
 final class GameSession {
+    static final String FLAG_TALKED_TO_CURUPIRA = "hasTalkedToCurupira";
+    static final String FLAG_VISITED_CABIN = "hasVisitedCabin";
+    static final String FLAG_PHASE_ONE_COMPLETE = "phase-1-villain";
     private String playerName = "Viajante";
     private int activeSlot = 1;
     private Scene scene = Scene.FOREST_PATH;
     private Stage stage = Stage.FIND_CABIN;
-    private float playerX = 100f;
-    private float playerY = 540f;
+    private float playerX = 960f;
+    private float playerY = 620f;
     private boolean animalFollowing;
     private long raceEndsAt;
     private final Set<String> completed = new HashSet<String>();
@@ -21,8 +24,8 @@ final class GameSession {
         activeSlot = slot;
         scene = Scene.FOREST_PATH;
         stage = Stage.FIND_CABIN;
-        playerX = 100f;
-        playerY = 540f;
+        playerX = 960f;
+        playerY = 620f;
         animalFollowing = false;
         raceEndsAt = 0L;
         completed.clear();
@@ -38,6 +41,8 @@ final class GameSession {
     long raceEndsAt() { return raceEndsAt; }
     boolean raceIsActive() { return false; }
     boolean isComplete(String id) { return completed.contains(id); }
+    boolean hasTalkedToCurupira() { return isComplete(FLAG_TALKED_TO_CURUPIRA); }
+    boolean hasVisitedCabin() { return isComplete(FLAG_VISITED_CABIN); }
     Set<String> completedCopy() { return new HashSet<String>(completed); }
 
     void setScene(Scene value) { scene = value; }
@@ -46,7 +51,18 @@ final class GameSession {
     void setAnimalFollowing(boolean value) { animalFollowing = value; }
     void setRaceEndsAt(long value) { raceEndsAt = value; }
 
+    void resetPhaseOne() {
+        scene = Scene.FOREST_PATH;
+        stage = Stage.FIND_CABIN;
+        playerX = 960f;
+        playerY = 620f;
+        animalFollowing = false;
+        raceEndsAt = 0L;
+    }
+
     void complete(String id) { completed.add(id); }
+    void markTalkedToCurupira() { complete(FLAG_TALKED_TO_CURUPIRA); }
+    void markVisitedCabin() { complete(FLAG_VISITED_CABIN); }
     boolean completedAll(String... ids) { return completed.containsAll(Arrays.asList(ids)); }
 
     void startRace() { raceEndsAt = System.currentTimeMillis() + 30000L; }

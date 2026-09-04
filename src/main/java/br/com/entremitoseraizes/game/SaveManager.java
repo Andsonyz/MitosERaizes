@@ -156,13 +156,13 @@ public final class SaveManager {
             readFloat(
                 properties,
                 "x",
-                100f
+                960f
             ),
 
             readFloat(
                 properties,
                 "y",
-                540f
+                620f
             ),
 
             Boolean.parseBoolean(

@@ -45,6 +45,25 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
     private static final float EDGE = 28f;
     private static final int HELP_BUTTON_SIZE = 100;
     private static final int HELP_BUTTON_MARGIN = 24;
+    private static final int MAX_VILLAIN_HEALTH = 5;
+    private static final int MAX_PLAYER_HEALTH = 100;
+    private static final int VILLAIN_DAMAGE = 1;
+    private static final int PLAYER_DAMAGE = 20;
+    private static final String[] BATTLE_QUESTIONS = {
+        "Qual atitude ajuda a preservar a floresta?",
+        "O que devemos fazer ao encontrar um animal silvestre ferido?",
+        "Por que a caça ilegal prejudica a natureza?",
+        "Qual e uma forma correta de proteger os animais?",
+        "Qual e uma consequencia da caça ilegal?"
+    };
+    private static final String[][] BATTLE_OPTIONS = {
+        { "A) Jogar lixo no rio", "B) Plantar e cuidar das arvores", "C) Queimar a mata", "D) Retirar os ninhos" },
+        { "A) Chama-lo para casa", "B) Assusta-lo", "C) Procurar ajuda especializada", "D) Vende-lo" },
+        { "A) Reduz as especies e desequilibra o ambiente", "B) Limpa a floresta", "C) Ajuda todos os animais", "D) Nao causa nenhum problema" },
+        { "A) Respeitar seu habitat", "B) Prende-lo por diversao", "C) Comprar animais capturados", "D) Destruir seu abrigo" },
+        { "A) Aumenta a biodiversidade", "B) Extingue especies e causa sofrimento", "C) Melhora os rios", "D) Protege a floresta" }
+    };
+    private static final int[] BATTLE_CORRECT = { 1, 2, 0, 0, 1 };
     private double scale = 1.0;
     private double offsetX = 0;
     private double offsetY = 0;
@@ -56,6 +75,10 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
     private BufferedImage forestPath;
     private BufferedImage cabinApproach;
     private BufferedImage cabinInterior;
+    private BufferedImage unlockedForestPath;
+    private BufferedImage forestPt4;
+    private BufferedImage forestPt5;
+    private BufferedImage forestPt6;
     private BufferedImage title;
     private BufferedImage novoJogo;
     private BufferedImage continuar;
@@ -63,6 +86,8 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
     private BufferedImage sair;
     private BufferedImage helpButton;
     private BufferedImage curupira;
+    private BufferedImage villainSmall;
+    private BufferedImage villainAdult;
     private BufferedImage gregIdleLeft;
     private BufferedImage gregIdleRight;
     private BufferedImage gregWalkLeftPart1;
@@ -104,6 +129,14 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
     private Runnable transitionAction;
     private String toast = "";
     private int toastFrames;
+    private int continueIndex;
+    private int endIndex;
+    private int battleQuestion;
+    private int villainHealth;
+    private int playerHealth;
+    private String battleMessage = "";
+    private int battleFeedbackFrames;
+    private boolean finishBattleAfterFeedback;
 
     GamePanel() {
         setPreferredSize(new Dimension(WIDTH, HEIGHT));
@@ -150,26 +183,32 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
 
 
     private void loadAssets() {
-        forestPath = loadImage("Cenarios", "CRPR-pt1.jpeg");
-        cabinApproach = loadImage("Cenarios", "CRPR-pt2.jpeg");
-        cabinInterior = loadImage("Cenarios", "CRPR-pt3.jpeg");
-        menuFallback = loadImage("Cenarios", "MENU_loop.gif");
-        title = loadImage("Cenarios", "Titulo.png");
-        novoJogo = loadImage("Cenarios", "NovoGame.png");
-        continuar = loadImage("Cenarios", "Continuar.png");
-        configuracoes = loadImage("Cenarios", "Configuracoes.png");
-        sair = loadImage("Cenarios", "Sair.png");
-        helpButton = loadImage("Cenarios", "Interrogacao.png");
-        curupira = loadImage("Personagens", "CURUPIRA.PNG");
-        gregIdleLeft = loadImage("Greg", "GregParadoE.png");
-        gregIdleRight = loadImage("Greg", "GregParadoD.png");
-        gregWalkLeftPart1 = loadImage("Greg", "GregAndandoEPT1.png");
-        gregWalkLeftPart2 = loadImage("Greg", "GregAndandoEPT2.png");
-        gregWalkRightPart1 = loadImage("Greg", "GregAndandoDPT1.png");
-        gregWalkRightPart2 = loadImage("Greg", "GregAndandoDPT2.png");
-        menuVideo = asset("Cenarios", "MENU_loop.mp4");
+        forestPath = loadImage("Cenarios/CURUPIRA", "CRPRBLOQUE-pt1.png");
+        cabinApproach = loadImage("Cenarios/CURUPIRA", "CRPR-pt2.jpeg");
+        cabinInterior = loadImage("Cenarios/CURUPIRA", "CRPR-pt3.jpeg");
+        unlockedForestPath = loadImage("Cenarios/CURUPIRA", "CRPRDESBLO-pt1.jpeg");
+        forestPt4 = loadImage("Cenarios/CURUPIRA", "CRPR-pt4.jpeg");
+        forestPt5 = loadImage("Cenarios/CURUPIRA", "CRPR-pt5.jpeg");
+        forestPt6 = loadImage("Cenarios/CURUPIRA", "CRPR-pt6.jpeg");
+        menuFallback = loadImage("Cenarios/Menu", "MENU_loop.gif");
+        title = loadImage("Cenarios/Menu", "Titulo.png");
+        novoJogo = loadImage("Cenarios/Menu", "NovoGame.png");
+        continuar = loadImage("Cenarios/Menu", "Continuar.png");
+        configuracoes = loadImage("Cenarios/Menu", "Configuracoes.png");
+        sair = loadImage("Cenarios/Menu", "Sair.png");
+        helpButton = loadImage("Cenarios/Menu", "Interrogacao.png");
+        curupira = loadImage("Personagens/guardioes", "CURUPIRA.PNG");
+        villainSmall = loadImage("Personagens/Viloes", "Vilao1Pequeno.png");
+        villainAdult = loadImage("Personagens/Viloes", "Vilao1Adulto.png");
+        gregIdleLeft = loadImage("Personagens/Greg", "GregParadoE.png");
+        gregIdleRight = loadImage("Personagens/Greg", "GregParadoD.png");
+        gregWalkLeftPart1 = loadImage("Personagens/Greg", "GregAndandoEPT1.png");
+        gregWalkLeftPart2 = loadImage("Personagens/Greg", "GregAndandoEPT2.png");
+        gregWalkRightPart1 = loadImage("Personagens/Greg", "GregAndandoDPT1.png");
+        gregWalkRightPart2 = loadImage("Personagens/Greg", "GregAndandoDPT2.png");
+        menuVideo = asset("Cenarios/Menu", "MENU_loop.mp4");
         if (!openMenuVideo()) {
-            File gif = asset("Cenarios", "MENU_loop.gif");
+            File gif = asset("Cenarios/Menu", "MENU_loop.gif");
             if (gif.isFile() && !Boolean.getBoolean("entremitos.test.noGif")) menuAnimation = new ImageIcon(gif.getAbsolutePath());
         }
     }
@@ -274,6 +313,9 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
             transitionFrame++;
             if (transitionFrame == 18 && transitionAction != null) transitionAction.run();
             if (transitionFrame >= 36) { transitionFrame = -1; transitionAction = null; }
+        } else if (screen == Screen.BATTLE && battleFeedbackFrames > 0) {
+            battleFeedbackFrames--;
+            if (battleFeedbackFrames == 0) advanceBattleRound();
         } else if (screen == Screen.WORLD && session.scene() != Scene.CABIN_INTERIOR) movePlayer(delta);
         repaint();
     }
@@ -293,10 +335,41 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
         float diagonal = dx != 0f && dy != 0f ? 0.7071f : 1f;
         float x = session.playerX() + dx * SPEED * diagonal * delta;
         float y = clamp(session.playerY() + dy * SPEED * diagonal * delta, 130f, HEIGHT - 52f);
-        if (session.scene() == Scene.FOREST_PATH && x >= WIDTH - EDGE) {
+        Scene scene = session.scene();
+        if (scene == Scene.FOREST_PATH && session.hasTalkedToCurupira() && x >= WIDTH - EDGE) {
             changeScene(Scene.CABIN_APPROACH, 78f, 525f);
-        } else if (session.scene() == Scene.CABIN_APPROACH && x <= EDGE) {
-            changeScene(Scene.FOREST_PATH, WIDTH - 82f, 525f);
+        } else if (scene == Scene.CABIN_APPROACH && x >= WIDTH - EDGE) {
+            session.setPosition(950f, 440f);
+        } else if (scene == Scene.CABIN_APPROACH && x <= EDGE) {
+            if (session.hasVisitedCabin() && session.stage() == Stage.RETURN_TO_PT2) {
+                session.setStage(Stage.ACCESS_UNLOCKED_FOREST);
+                changeScene(Scene.UNLOCKED_FOREST_PATH, WIDTH - 82f, 620f);
+            } else {
+                changeScene(Scene.UNLOCKED_FOREST_PATH, WIDTH - 82f, 620f);
+            }
+        } else if (scene == Scene.UNLOCKED_FOREST_PATH && x >= WIDTH - EDGE) {
+            changeScene(Scene.CABIN_APPROACH, 78f, 525f);
+        } else if (scene == Scene.UNLOCKED_FOREST_PATH && x <= EDGE
+                && session.hasTalkedToCurupira() && session.hasVisitedCabin()) {
+            session.setStage(Stage.REACH_PT4);
+            changeScene(Scene.FOREST_PT4, WIDTH - 82f, 620f);
+        } else if (scene == Scene.FOREST_PT4 && x <= EDGE
+            && session.stage().ordinal() >= Stage.REACH_PT4.ordinal()) {
+            session.setStage(Stage.REACH_PT5);
+            changeScene(Scene.FOREST_PT5, WIDTH - 82f, 620f);
+        } else if (scene == Scene.FOREST_PT4 && x >= WIDTH - EDGE) {
+            changeScene(Scene.UNLOCKED_FOREST_PATH, 78f, 620f);
+        } else if (scene == Scene.FOREST_PT5 && x <= EDGE
+            && session.stage().ordinal() >= Stage.REACH_PT5.ordinal()) {
+            session.setStage(Stage.REACH_PT6);
+            changeScene(Scene.FOREST_PT6, WIDTH - 82f, 620f);
+        } else if (scene == Scene.FOREST_PT5 && x >= WIDTH - EDGE) {
+            changeScene(Scene.FOREST_PT4, WIDTH - 82f, 620f);
+        } else if (scene == Scene.FOREST_PT6 && x >= WIDTH - 120f && session.stage() == Stage.REACH_PT6) {
+            session.setPosition(WIDTH - 140f, y);
+            startVillainEncounter();
+        } else if (scene == Scene.FOREST_PT6 && x <= EDGE) {
+            changeScene(Scene.FOREST_PT5, WIDTH - 82f, 620f);
         } else {
             session.setPosition(clamp(x, EDGE, WIDTH - EDGE), y);
         }
@@ -365,6 +438,18 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
         } else if (screen == Screen.END) {
 
             drawEnd(g);
+
+        } else if (screen == Screen.CONTINUE_CHOICE) {
+
+            drawContinueChoice(g);
+
+        } else if (screen == Screen.BATTLE) {
+
+            drawBattle(g);
+
+        } else if (screen == Screen.BATTLE_RESULT) {
+
+            drawBattleResult(g);
 
         } else {
 
@@ -588,9 +673,18 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
     }
 
     private void drawScene(Graphics2D g) {
-        if (session.scene() == Scene.FOREST_PATH) drawImageScene(g, forestPath, "Cenário 1/3  •  Trilha da floresta", "Vá para a direita para encontrar a cabana.");
+        if (session.scene() == Scene.FOREST_PATH) drawImageScene(g, forestPath, "CRPRBLOQUE-pt1", "Encontre o Curupira.");
         else if (session.scene() == Scene.CABIN_APPROACH) drawCabinApproach(g);
-        else drawCabinInterior(g);
+        else if (session.scene() == Scene.CABIN_INTERIOR) drawCabinInterior(g);
+        else if (session.scene() == Scene.UNLOCKED_FOREST_PATH) drawImageScene(g, unlockedForestPath, "CRPRDESBLO-pt1", "Siga pela clareira.");
+        else if (session.scene() == Scene.FOREST_PT4) drawImageScene(g, forestPt4, "CRPR-pt4", "Continue pela floresta.");
+        else if (session.scene() == Scene.FOREST_PT5) drawImageScene(g, forestPt5, "CRPR-pt5", "A ameaça está próxima.");
+        else drawImageScene(g, forestPt6, "CRPR-pt6", "Encontre a origem da caça ilegal.");
+        if (session.scene() == Scene.FOREST_PATH && !session.hasTalkedToCurupira()) {
+            drawCurupira(g, 1000, 430, 145, 178);
+        } else if (session.scene() == Scene.FOREST_PT6 && session.stage() == Stage.BATTLE_VILLAIN) {
+            drawVillain(g, 1010, 390, 150, 220);
+        }
         if (toastFrames > 0) drawToast(g);
     }
 
@@ -640,6 +734,10 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
         else { g.setColor(c(0xE86A28)); g.fillOval(x, y, w, h); }
     }
 
+    private void drawVillain(Graphics2D g, int x, int y, int w, int h) {
+        if (villainSmall != null) g.drawImage(villainSmall, x, y, w, h, this);
+    }
+
     private void drawDialogue(Graphics2D g) {
         shade(g, 110);
         if (dialogue.isEmpty()) return;
@@ -656,6 +754,14 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
     }
 
     private void drawDialogueCharacters(Graphics2D g, String speaker) {
+        if (speaker.toLowerCase().contains("narradora") && villainSmall != null) {
+            drawDialogueCharacter(g, villainSmall, 910, 205, 230, 300, true);
+            return;
+        }
+        if (speaker.toLowerCase().contains("caçador") || speaker.toLowerCase().contains("vilão")) {
+            drawDialogueCharacter(g, villainAdult, 910, 130, 285, 470, true);
+            return;
+        }
         boolean curupiraSpeaking = "Curupira".equalsIgnoreCase(speaker);
         BufferedImage greg = gregDirection < 0 ? gregIdleLeft : gregIdleRight;
         drawDialogueCharacter(g, greg, 90, 205, 250, 430, !curupiraSpeaking);
@@ -691,7 +797,13 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
     }
 
     private String sceneLabel(Scene scene) {
-        return scene == Scene.FOREST_PATH ? "CRPR-pt1 - Trilha" : scene == Scene.CABIN_APPROACH ? "CRPR-pt2 - Entrada da cabana" : "CRPR-pt3 - Dentro da cabana";
+        if (scene == Scene.FOREST_PATH) return "CRPRBLOQUE-pt1 - Início";
+        if (scene == Scene.CABIN_APPROACH) return "CRPR-pt2 - Entrada da cabana";
+        if (scene == Scene.CABIN_INTERIOR) return "CRPR-pt3 - Dentro da cabana";
+        if (scene == Scene.UNLOCKED_FOREST_PATH) return "CRPRDESBLO-pt1 - Clareira";
+        if (scene == Scene.FOREST_PT4) return "CRPR-pt4";
+        if (scene == Scene.FOREST_PT5) return "CRPR-pt5";
+        return "CRPR-pt6 - Confronto";
     }
 
     private void drawSettings(Graphics2D g) {
@@ -850,8 +962,8 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
         g.setFont(normal(19));
         drawWrapped(
             g,
-            "Você encontrou o Curupira e recebeu o chamado para proteger a mata. "
-                + "A próxima parte da aventura será desenvolvida a partir deste encontro.",
+            "Você impediu a caça ilegal e ajudou a preservar a floresta. "
+                + "Os animais estão protegidos e a Fase 1 foi concluída.",
             WIDTH / 2 - 172,
             293,
             345,
@@ -877,14 +989,53 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
             );
         }
 
-        // Instrução para voltar ao lobby
-        g.setFont(normal(15));
-        centered(
-            g,
-            "Enter ou Esc para voltar ao lobby",
-            WIDTH / 2,
-            550
-        );
+        drawOption(g, "CONTINUAR", 530, endIndex == 0, WIDTH / 2 - 180, 170);
+        drawOption(g, "MENU", 530, endIndex == 1, WIDTH / 2 + 10, 170);
+        g.setFont(normal(14));
+        centered(g, "Setas e Enter", WIDTH / 2, 570);
+    }
+
+    private void drawContinueChoice(Graphics2D g) {
+        drawMenuBackground(g); shade(g, 140); card(g, WIDTH / 2 - 330, 145, 660, 430);
+        g.setColor(ink()); g.setFont(font(29)); centered(g, "COMO DESEJA CONTINUAR?", WIDTH / 2, 215);
+        g.setFont(normal(16)); centered(g, "Escolha o caminho da sua aventura.", WIDTH / 2, 250);
+        drawOption(g, "PRÓXIMA FASE", 300, continueIndex == 0, WIDTH / 2 - 230, 460);
+        drawOption(g, "FASE 1", 390, continueIndex == 1, WIDTH / 2 - 230, 460);
+        g.setColor(ink()); g.setFont(normal(14)); centered(g, "A próxima fase será liberada quando estiver disponível.", WIDTH / 2, 490);
+        centered(g, "Esc volta ao menu", WIDTH / 2, 535);
+    }
+
+    private void drawBattle(Graphics2D g) {
+        drawScene(g); shade(g, 125); card(g, 74, 58, WIDTH - 148, HEIGHT - 116);
+        g.setColor(ink()); g.setFont(font(29)); centered(g, "CONFRONTO DE CONHECIMENTO", WIDTH / 2, 108);
+        drawHealthBar(g, 135, 135, 390, "Vida do jogador", playerHealth, MAX_PLAYER_HEALTH, c(0x3B9B62));
+        drawHealthBar(g, WIDTH - 525, 135, 390, "Vida do caçador", villainHealth, MAX_VILLAIN_HEALTH, c(0xB84A3A));
+        g.setColor(ink()); g.setFont(font(21));
+        drawWrapped(g, "Pergunta " + (battleQuestion + 1) + " de " + BATTLE_QUESTIONS.length + ": " + BATTLE_QUESTIONS[battleQuestion], 135, 220, WIDTH - 270, 30, ink());
+        for (int i = 0; i < BATTLE_OPTIONS[battleQuestion].length; i++) {
+            drawOption(g, BATTLE_OPTIONS[battleQuestion][i], 290 + i * 58, false, 135, WIDTH - 270);
+        }
+        if (!battleMessage.isEmpty()) {
+            g.setColor(selected()); g.setFont(font(18)); centered(g, battleMessage, WIDTH / 2, 550);
+        }
+        g.setColor(ink()); g.setFont(normal(14)); centered(g, "A / B / C / D ou 1 / 2 / 3 / 4 para responder", WIDTH / 2, 590);
+    }
+
+    private void drawHealthBar(Graphics2D g, int x, int y, int width, String label, int value, int maximum, Color fill) {
+        g.setColor(ink()); g.setFont(normal(15)); centered(g, label, x + width / 2, y);
+        g.setColor(c(0x321F1B)); g.fillRoundRect(x, y + 12, width, 22, 8, 8);
+        g.setColor(fill); g.fillRoundRect(x, y + 12, Math.max(0, width * value / maximum), 22, 8, 8);
+        g.setColor(Color.WHITE); g.setFont(normal(13)); centered(g, value + " / " + maximum, x + width / 2, y + 29);
+    }
+
+    private void drawBattleResult(Graphics2D g) {
+        drawMenuBackground(g); shade(g, 145); card(g, WIDTH / 2 - 345, 130, 690, 460);
+        g.setColor(ink()); g.setFont(font(30)); centered(g, "A CAÇADA CONTINUA", WIDTH / 2, 205);
+        g.setFont(normal(19));
+        drawWrapped(g, "O caçador escapou por enquanto e continua ameaçando os animais da floresta.", WIDTH / 2 - 255, 275, 510, 30, ink());
+        drawWrapped(g, "Levante-se e tente novamente! A mata ainda precisa de você.", WIDTH / 2 - 255, 350, 510, 30, ink());
+        if (villainAdult != null) g.drawImage(villainAdult, WIDTH / 2 - 72, 385, 144, 190, this);
+        g.setFont(normal(14)); centered(g, "Enter para voltar ao início de CRPR-pt6", WIDTH / 2, 550);
     }
 
     private void drawOption(Graphics2D g, String label, int y, boolean active, int x, int width) {
@@ -904,16 +1055,112 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
     }
 
     private void interact() {
-        if (session.scene() == Scene.CABIN_APPROACH && distance(session.playerX(), session.playerY(), 950, 440) < 118) {
+        if (session.scene() == Scene.FOREST_PATH && !session.hasTalkedToCurupira()
+                && distance(session.playerX(), session.playerY(), 1080, 620) < 155) {
+            openInitialCurupiraDialogue();
+            return;
+        }
+        if (session.scene() == Scene.CABIN_APPROACH && session.stage() == Stage.ACCESS_UNLOCKED_FOREST
+                && distance(session.playerX(), session.playerY(), 950, 440) < 118) {
             session.setStage(Stage.TALK_TO_CURUPIRA); changeScene(Scene.CABIN_INTERIOR, 700f, 570f); return;
         }
         if (session.scene() == Scene.CABIN_INTERIOR) showToast("O diálogo da cabana já foi iniciado.");
         else showToast("Aproxime-se da porta para interagir.");
     }
 
+    private void startVillainEncounter() {
+        if (screen != Screen.WORLD || session.stage() != Stage.REACH_PT6) return;
+        session.setStage(Stage.BATTLE_VILLAIN);
+        battleQuestion = 0;
+        villainHealth = MAX_VILLAIN_HEALTH;
+        playerHealth = MAX_PLAYER_HEALTH;
+        battleMessage = "";
+        battleFeedbackFrames = 0;
+        finishBattleAfterFeedback = false;
+        saves.save(session);
+        openDialogue(
+            lines(
+                "Narradora", "Uma sombra surge entre as árvores. O responsável pela caça ilegal finalmente aparece.",
+                "Caçador", "Então foi o Curupira quem chamou você. Eu sou o responsável pelos animais que desapareceram.",
+                session.playerName(), "Você está ferindo a floresta e caçando animais ilegalmente!",
+                "Caçador", "A mata não pode ser protegida apenas com coragem. Vamos ver o que você aprendeu sobre ela."
+            ),
+            new Runnable() {
+                @Override public void run() { screen = Screen.BATTLE; }
+            },
+            new Runnable() {
+                @Override public void run() {
+                    session.setStage(Stage.REACH_PT6);
+                    session.setPosition(1040f, 620f);
+                    saves.save(session);
+                    screen = Screen.WORLD;
+                }
+            }
+        );
+    }
+
+    private void answerBattle(int answer) {
+        if (answer < 0 || answer > 3 || screen != Screen.BATTLE) return;
+        if (answer == BATTLE_CORRECT[battleQuestion]) {
+            villainHealth = Math.max(0, villainHealth - VILLAIN_DAMAGE);
+            battleMessage = "Acerto! A proteção da natureza é o caminho.";
+        } else {
+            playerHealth = Math.max(0, playerHealth - PLAYER_DAMAGE);
+            battleMessage = "Resposta incorreta. O caçador aproveitou a distração.";
+        }
+        finishBattleAfterFeedback = battleQuestion == BATTLE_QUESTIONS.length - 1
+                || playerHealth == 0 || villainHealth == 0;
+        battleFeedbackFrames = 30;
+    }
+
+    private void advanceBattleRound() {
+        if (playerHealth == 0) finishBattleLoss();
+        else if (villainHealth == 0) finishBattleWin();
+        else if (finishBattleAfterFeedback) finishBattleLoss();
+        else battleQuestion++;
+        finishBattleAfterFeedback = false;
+    }
+
+    private void finishBattleWin() {
+        session.setStage(Stage.PHASE_COMPLETE);
+        session.complete(GameSession.FLAG_PHASE_ONE_COMPLETE);
+        saves.save(session);
+        endIndex = 0;
+        screen = Screen.END;
+    }
+
+    private void finishBattleLoss() {
+        session.setStage(Stage.REACH_PT6);
+        session.setScene(Scene.FOREST_PT6);
+        session.setPosition(100f, 620f);
+        battleQuestion = 0;
+        villainHealth = MAX_VILLAIN_HEALTH;
+        playerHealth = MAX_PLAYER_HEALTH;
+        battleMessage = "";
+        saves.save(session);
+        openDialogue(
+            lines("Caçador", "A floresta já é minha!", session.playerName(), "Você não conseguiu impedir a caça ilegal desta vez. Levante-se e tente novamente!"),
+            new Runnable() { @Override public void run() { screen = Screen.BATTLE_RESULT; } },
+            new Runnable() { @Override public void run() { screen = Screen.BATTLE_RESULT; } }
+        );
+    }
+
+    private void retryBattle() {
+        session.setStage(Stage.REACH_PT6);
+        session.setScene(Scene.FOREST_PT6);
+        session.setPosition(100f, 620f);
+        battleQuestion = 0;
+        villainHealth = MAX_VILLAIN_HEALTH;
+        playerHealth = MAX_PLAYER_HEALTH;
+        battleMessage = "";
+        saves.save(session);
+        screen = Screen.WORLD;
+        beginTransition(null);
+    }
+
     private void startNew() {
         session.startNew(typedName, slotIndex + 1);
-        session.setPosition(100f, 620f);
+        session.setPosition(960f, 620f);
         saves.save(session);
         openDialogue(lines("Narradora", "Há muito tempo, histórias são contadas sobre seres que vivem nas florestas brasileiras.", "Narradora", session.playerName() + " chega à borda da mata. Um assobio distante anuncia que o Curupira está por perto."), new Runnable() {
             @Override public void run() { screen = Screen.WORLD; beginTransition(null); }
@@ -942,9 +1189,9 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
 
     private void openCurupiraDialogue(final Scene previousScene) {
         openDialogue(
-            lines("Curupira", "Você não deveria estar aqui, " + session.playerName() + ".", session.playerName(), "Eu não vim para destruir a floresta. Quero aprender a protegê-la.", "Curupira", "Então escute a mata. A floresta não precisa de heróis; precisa de quem esteja disposto a defendê-la."),
+            lines("Curupira", "A floresta está em perigo, " + session.playerName() + ". Há um caçador misterioso na floresta que está capturando animais ilegalmente.", session.playerName(), "Quem faria isso com os animais e com a mata?", "Curupira", "Ainda não sei quem ele é, mas seus rastros levam para além da clareira. Depois de cumprir seu caminho, você poderá encontrá-lo."),
             new Runnable() {
-                @Override public void run() { session.setStage(Stage.COMPLETE); session.setScene(previousScene); session.setPosition(900f, 520f); saves.save(session); screen = Screen.WORLD; }
+                @Override public void run() { session.markVisitedCabin(); session.setStage(Stage.RETURN_TO_PT2); session.setScene(previousScene); session.setPosition(900f, 520f); saves.save(session); screen = Screen.WORLD; }
             },
             new Runnable() {
                 @Override public void run() {
@@ -953,6 +1200,23 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
                     screen = Screen.WORLD;
                 }
             }
+        );
+    }
+
+    private void openInitialCurupiraDialogue() {
+        openDialogue(
+            lines("Curupira", "Há um caçador misterioso na floresta que está capturando animais ilegalmente.", session.playerName(), "Eu vou descobrir quem está fazendo isso.", "Curupira", "Siga pela clareira e entre na cabana. O caminho agora está livre."),
+            new Runnable() {
+                @Override public void run() {
+                    session.markTalkedToCurupira();
+                    session.setStage(Stage.ACCESS_UNLOCKED_FOREST);
+                    session.setScene(Scene.UNLOCKED_FOREST_PATH);
+                    session.setPosition(1100f, 620f);
+                    saves.save(session);
+                    screen = Screen.WORLD;
+                }
+            },
+            null
         );
     }
 
@@ -1023,16 +1287,47 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
 
         session = loaded;
         loadingSave = false;
+        continueIndex = 0;
+        screen = Screen.CONTINUE_CHOICE;
+    }
 
-        screen = Screen.WORLD;
-
-        beginTransition(new Runnable() {
-            @Override public void run() {
-                if (session.scene() == Scene.CABIN_INTERIOR) {
-                    openCurupiraDialogue(Scene.CABIN_APPROACH);
+    private void handleContinueChoice(int key) {
+        if (up(key) || down(key)) {
+            continueIndex = 1 - continueIndex;
+        } else if (confirm(key)) {
+            if (continueIndex == 0) {
+                if (session.stage() == Stage.PHASE_COMPLETE || session.isComplete("phase-1-villain")) {
+                    screen = Screen.WORLD;
+                    showToast("A próxima fase ainda não está disponível.");
+                } else {
+                    screen = Screen.WORLD;
+                    beginTransition(new Runnable() {
+                        @Override public void run() {
+                            if (session.scene() == Scene.CABIN_INTERIOR) {
+                                openCurupiraDialogue(Scene.CABIN_APPROACH);
+                            } else if (session.scene() == Scene.FOREST_PT6 && session.stage() == Stage.BATTLE_VILLAIN) {
+                                session.setStage(Stage.REACH_PT6);
+                                startVillainEncounter();
+                            }
+                        }
+                    });
                 }
+            } else {
+                session.resetPhaseOne();
+                saves.save(session);
+                screen = Screen.WORLD;
+                beginTransition(null);
             }
-        });
+        } else if (key == KeyEvent.VK_ESCAPE) {
+            screen = Screen.MENU;
+        }
+    }
+
+    private void handleBattle(int key) {
+        if (key == KeyEvent.VK_A || key == KeyEvent.VK_NUMPAD1) answerBattle(0);
+        else if (key == KeyEvent.VK_B || key == KeyEvent.VK_NUMPAD2) answerBattle(1);
+        else if (key == KeyEvent.VK_C || key == KeyEvent.VK_NUMPAD3) answerBattle(2);
+        else if (key == KeyEvent.VK_D || key == KeyEvent.VK_NUMPAD4) answerBattle(3);
     }
     
     private void handleSlots(int key) {
@@ -1069,7 +1364,25 @@ final class GamePanel extends JPanel implements KeyListener, MouseListener, Mous
     @Override public void keyPressed(KeyEvent event) {
         int key = event.getKeyCode();
         if (screen == Screen.WORLD && movement(key)) heldKeys.add(key);
-        if (screen == Screen.MENU) handleMenu(key); else if (screen == Screen.SLOT_SELECT) handleSlots(key); else if (screen == Screen.NAME_INPUT) handleName(key); else if (screen == Screen.WORLD) { if (key == KeyEvent.VK_E) interact(); else if (key == KeyEvent.VK_M) screen = Screen.MAP; else if (key == KeyEvent.VK_F5) { saves.save(session); showToast("Progresso salvo."); } else if (key == KeyEvent.VK_ESCAPE) { heldKeys.clear(); pauseIndex = 0; screen = Screen.PAUSE; } } else if (screen == Screen.DIALOGUE && key == KeyEvent.VK_ESCAPE) exitDialogue(); else if (screen == Screen.DIALOGUE && confirm(key)) advanceDialogue(); else if (screen == Screen.MAP && (key == KeyEvent.VK_ESCAPE || key == KeyEvent.VK_M)) screen = Screen.WORLD; else if (screen == Screen.PAUSE) handlePause(key); else if (screen == Screen.SETTINGS) handleSettings(key); else if (screen == Screen.CONTROLS && key == KeyEvent.VK_ESCAPE) screen = settingsReturn; else if (screen == Screen.EXTRAS && (confirm(key) || key == KeyEvent.VK_ESCAPE)) screen = Screen.MENU; else if (screen == Screen.END && (confirm(key) || key == KeyEvent.VK_ESCAPE)) screen = Screen.MENU;
+        if (screen == Screen.MENU) handleMenu(key); else if (screen == Screen.SLOT_SELECT) handleSlots(key); else if (screen == Screen.NAME_INPUT) handleName(key); else if (screen == Screen.WORLD) { if (key == KeyEvent.VK_E) interact(); else if (key == KeyEvent.VK_M) screen = Screen.MAP; else if (key == KeyEvent.VK_F5) { saves.save(session); showToast("Progresso salvo."); } else if (key == KeyEvent.VK_ESCAPE) { heldKeys.clear(); pauseIndex = 0; screen = Screen.PAUSE; } } else if (screen == Screen.DIALOGUE && key == KeyEvent.VK_ESCAPE) exitDialogue(); else if (screen == Screen.DIALOGUE && confirm(key)) advanceDialogue(); else if (screen == Screen.MAP && (key == KeyEvent.VK_ESCAPE || key == KeyEvent.VK_M)) screen = Screen.WORLD; else if (screen == Screen.PAUSE) handlePause(key); else if (screen == Screen.SETTINGS) handleSettings(key); else if (screen == Screen.CONTROLS && key == KeyEvent.VK_ESCAPE) screen = settingsReturn; else if (screen == Screen.EXTRAS && (confirm(key) || key == KeyEvent.VK_ESCAPE)) screen = Screen.MENU;
+        else if (screen == Screen.CONTINUE_CHOICE) handleContinueChoice(key);
+        else if (screen == Screen.BATTLE) handleBattle(key);
+        else if (screen == Screen.BATTLE_RESULT && confirm(key)) retryBattle();
+        else if (screen == Screen.END) handleEnd(key);
+    }
+
+    private void handleEnd(int key) {
+        if (up(key) || down(key)) endIndex = 1 - endIndex;
+        else if (confirm(key)) {
+            if (endIndex == 0) {
+                screen = Screen.WORLD;
+                showToast("A próxima fase será adicionada em breve.");
+            } else {
+                screen = Screen.MENU;
+            }
+        } else if (key == KeyEvent.VK_ESCAPE) {
+            screen = Screen.MENU;
+        }
     }
 
     @Override
